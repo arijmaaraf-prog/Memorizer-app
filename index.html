@@ -983,8 +983,12 @@ function fcEnsureMeta(data) {
 }
 
 function fcNormalizeCard(card) {
-  if (!Number.isFinite(card.interval_days)) card.interval_days = Math.max((card.stability || 10) / FC_DAY_SECONDS, 0.01);
-  if (!Number.isFinite(card.stability)) card.stability = Math.max(card.interval_days * FC_DAY_SECONDS, 1);
+  // Migrate stability from seconds to days: old-format values stored as days*86400 will exceed 3650.
+  if (Number.isFinite(card.stability) && card.stability > 3650) {
+    card.stability = card.stability / FC_DAY_SECONDS;
+  }
+  if (!Number.isFinite(card.interval_days)) card.interval_days = Math.max(card.stability || 0.01, 0.01);
+  if (!Number.isFinite(card.stability)) card.stability = Math.max(card.interval_days, 0.01);
   if (!Number.isFinite(card.difficulty)) card.difficulty = 5;
   if (!Number.isFinite(card.retrievability)) card.retrievability = 1;
   if (!Number.isFinite(card.reps)) card.reps = 0;
@@ -1001,10 +1005,10 @@ function fcNormalizeCard(card) {
 }
 
 function fcRetention(tSeconds, stability) {
-  // FSRS forgetting curve: R(t, S) = (1 + t / (9S))^-1
+  // FSRS forgetting curve: R(t, S) = (1 + t / (9S))^-1  stability is in days.
   if (stability <= 0) return 0;
   const tDays = Math.max(0, tSeconds / FC_DAY_SECONDS);
-  const sDays = Math.max(0.01, stability / FC_DAY_SECONDS);
+  const sDays = Math.max(0.01, stability);
   return Math.pow(1 + (tDays / (9 * sDays)), -1);
 }
 
@@ -1106,7 +1110,7 @@ function fcUpdateCard(card, rating) {
   const w = Array.isArray(fcSettings.fsrs_w) && fcSettings.fsrs_w.length === 17 ? fcSettings.fsrs_w : FC_FSRS_DEFAULT_W;
   const grade = Math.max(1, Math.min(4, rating + 1)); // Again/Hard/Good/Easy => 1..4
   const prevIntervalDays = Math.max(0.01, Number(card.interval_days));
-  const prevStabilityDays = Math.max(0.01, Number(card.stability) / FC_DAY_SECONDS);
+  const prevStabilityDays = Math.max(0.01, Number(card.stability)); // stability stored in days
   let stabilityDays = prevStabilityDays;
   let difficulty = Math.max(1, Math.min(10, Number(card.difficulty)));
   let reps = parseInt(card.reps, 10);
@@ -1145,7 +1149,7 @@ function fcUpdateCard(card, rating) {
   intervalDays = Math.min(intervalDays, 3650);
   stabilityDays = Math.min(stabilityDays, 3650);
   card.interval_days = Math.round(intervalDays * 1000) / 1000;
-  card.stability = Math.round(stabilityDays * FC_DAY_SECONDS * 1000) / 1000;
+  card.stability = Math.round(stabilityDays * 1000) / 1000; // stored in days
   card.difficulty = Math.round(difficulty * 1000) / 1000;
   card.retrievability = Math.round(Math.max(0, Math.min(1, retrievability)) * 10000) / 10000;
   card.reps = reps;
@@ -1249,41 +1253,114 @@ function fcBuildCalibrationDataset() {
   };
 }
 
-function fcReplayBrierScore(logs, w) {
-  // Re-derive retrievability from raw elapsed days using the given weight vector,
-  // instead of using the stored retrievability (which reflects old weights).
-  // Uses the FSRS forgetting curve: R = (1 + elapsed_days / (9 * stability_days))^-1
-  // We approximate stability_days from the logged prev_stability_days field.
+// --- Replay engine ---
+// Replays review logs per-card from scratch using candidate weights w.
+// Stability is recomputed dynamically — stored stability is NOT used as truth.
+// Prefers actual_elapsed_days (new telemetry); falls back to prev_interval_days for old logs.
+function fcReplayLogsWithWeights(logs, w) {
   if (!Array.isArray(logs) || logs.length === 0) return null;
-  const sDaysIdx = w ? w : FC_FSRS_DEFAULT_W;
-  let n = 0;
-  let brier = 0;
-  let logloss = 0;
-  let success = 0;
-  let pSum = 0;
-  for (const row of logs) {
-    const prevS = Number(row && row.prev_stability_days);
-    const prevI = Number(row && row.prev_interval_days);
-    const y = Number(row && row.grade) > 0 ? 1 : 0;
-    if (!Number.isFinite(prevS) || prevS <= 0) continue;
-    // Elapsed days at time of review ≈ prev_interval_days (the scheduled interval that was actually waited).
-    // Fall back to prev_stability_days if interval not logged.
-    const elapsedDays = Number.isFinite(prevI) && prevI > 0 ? prevI : prevS;
-    const sDays = Math.max(0.01, prevS);
-    const p = Math.max(0.001, Math.min(0.999, Math.pow(1 + elapsedDays / (9 * sDays), -1)));
-    n += 1;
-    success += y;
-    pSum += p;
-    brier += (p - y) * (p - y);
-    logloss += -(y * Math.log(p) + (1 - y) * Math.log(1 - p));
+  if (!Array.isArray(w) || w.length !== 17 || !w.every(function(v) { return Number.isFinite(v); })) {
+    w = FC_FSRS_DEFAULT_W.slice();
   }
+
+  // Group reviews by card and sort chronologically.
+  const byCard = Object.create(null);
+  for (const entry of logs) {
+    if (!entry || typeof entry.card !== "string") continue;
+    if (!byCard[entry.card]) byCard[entry.card] = [];
+    byCard[entry.card].push(entry);
+  }
+
+  let totalBrier = 0, totalLogloss = 0, successCount = 0, pSum = 0, n = 0;
+
+  for (const cardReviews of Object.values(byCard)) {
+    cardReviews.sort(function(a, b) { return new Date(a.ts).getTime() - new Date(b.ts).getTime(); });
+
+    let sDay = null; // replayed stability in days
+    let diff = 5;    // replayed difficulty
+    let reps = 0;    // replayed reps
+
+    for (const entry of cardReviews) {
+      const rawGrade = Number(entry.grade);
+      if (!Number.isFinite(rawGrade)) continue;
+      const fsrsGrade = Math.max(1, Math.min(4, rawGrade + 1)); // 0..3 -> 1..4
+      const entryWasNew = Boolean(entry.was_new);
+
+      // Bootstrap state on first log entry seen for this card.
+      if (sDay === null) {
+        if (entryWasNew) {
+          // True first new-card review: initialise from w, skip scoring (no prior state to predict).
+          if (fsrsGrade === 1) {
+            sDay = Math.max(0.02, fcFsrsInitialStability(0, w) * 0.6);
+            diff = Math.max(1, Math.min(10, fcFsrsInitialDifficulty(1, w)));
+            reps = 0;
+          } else {
+            sDay = Math.max(0.02, fcFsrsInitialStability(fsrsGrade - 1, w));
+            diff = Math.max(1, Math.min(10, fcFsrsInitialDifficulty(fsrsGrade, w)));
+            reps = 1;
+          }
+          sDay = Math.min(sDay, 10000);
+          continue;
+        } else {
+          // Card predates the log window: seed from logged prior state and proceed to score.
+          const bs = Number(entry.prev_stability_days);
+          sDay = Number.isFinite(bs) && bs > 0 ? Math.max(0.01, Math.min(10000, bs)) : 1;
+          diff = Math.max(1, Math.min(10, Number.isFinite(Number(entry.difficulty)) ? Number(entry.difficulty) : 5));
+          reps = 1;
+        }
+      }
+
+      // Prefer actual_elapsed_days (new telemetry); fall back to prev_interval_days for old logs.
+      const actualE = Number(entry.actual_elapsed_days);
+      const prevI = Number(entry.prev_interval_days);
+      const elapsed = Number.isFinite(actualE) && actualE >= 0
+        ? actualE
+        : (Number.isFinite(prevI) && prevI > 0 ? prevI : null);
+
+      // Score: predict recall probability using replayed stability and actual elapsed time.
+      let p = null;
+      if (elapsed !== null) {
+        p = Math.max(0.001, Math.min(0.999, Math.pow(1 + elapsed / (9 * sDay), -1)));
+        const y = rawGrade > 0 ? 1 : 0;
+        totalBrier += (p - y) * (p - y);
+        totalLogloss += -(y * Math.log(p) + (1 - y) * Math.log(1 - p));
+        successCount += y;
+        pSum += p;
+        n++;
+      }
+
+      // Advance replayed state using candidate weights.
+      const retriev = p !== null ? p : 0.9;
+      if (entryWasNew) {
+        if (fsrsGrade === 1) {
+          sDay = Math.max(0.02, fcFsrsInitialStability(0, w) * 0.6);
+          diff = Math.max(1, Math.min(10, fcFsrsInitialDifficulty(1, w)));
+          reps = 0;
+        } else {
+          sDay = Math.max(0.02, fcFsrsInitialStability(fsrsGrade - 1, w));
+          diff = Math.max(1, Math.min(10, fcFsrsInitialDifficulty(fsrsGrade, w)));
+          reps = 1;
+        }
+        sDay = Math.min(sDay, 10000);
+      } else if (fsrsGrade === 1) {
+        sDay = Math.max(0.02, Math.min(10000, fcFsrsNextForgetStability(sDay, diff, retriev, w)));
+        diff = Math.max(1, Math.min(10, fcFsrsNextDifficulty(diff, fsrsGrade, w)));
+        reps = 0;
+      } else {
+        sDay = Math.max(0.02, Math.min(10000, fcFsrsNextRecallStability(sDay, diff, retriev, fsrsGrade, w)));
+        diff = Math.max(1, Math.min(10, fcFsrsNextDifficulty(diff, fsrsGrade, w)));
+        reps++;
+      }
+    }
+  }
+
   if (n === 0) return null;
   return {
     n,
-    success_rate: Math.round((success / n) * 10000) / 10000,
-    brier: Math.round((brier / n) * 1000000) / 1000000,
-    logloss: Math.round((logloss / n) * 1000000) / 1000000,
-    mean_signed_error: Math.round(((success / n) - (pSum / n)) * 10000) / 10000
+    brier: Math.round((totalBrier / n) * 1000000) / 1000000,
+    logloss: Math.round((totalLogloss / n) * 1000000) / 1000000,
+    success_rate: Math.round((successCount / n) * 10000) / 10000,
+    mean_signed_error: Math.round(((successCount / n) - (pSum / n)) * 10000) / 10000
   };
 }
 
@@ -1320,36 +1397,46 @@ function fcClampWeight(value) {
   return Math.max(-8, Math.min(8, value));
 }
 
-function fcDefaultCalibrationOptimizer(dataset) {
-  const logs = (dataset && Array.isArray(dataset.review_logs)) ? dataset.review_logs : [];
-  const baseW = (dataset && dataset.settings && Array.isArray(dataset.settings.fsrs_w)) ? dataset.settings.fsrs_w.slice() : FC_FSRS_DEFAULT_W.slice();
-  const metrics = fcCalibrationMetricsFromLogs(logs);
-  if (!metrics || metrics.n < 50) return { fsrs_w: baseW };
+// --- Calibration optimizer ---
+// Coordinate descent over w[8..16] (interval dynamics weights).
+// Tries ±DELTA on each index, accepts only improvements — cannot degrade Brier score.
+// Deterministic: no randomness; same logs + same starting weights → same result.
+function fcCoordinateDescentOptimizer(dataset) {
+  const logs = Array.isArray(dataset && dataset.review_logs) ? dataset.review_logs : [];
+  const baseW = (dataset && dataset.settings && Array.isArray(dataset.settings.fsrs_w) && dataset.settings.fsrs_w.length === 17)
+    ? dataset.settings.fsrs_w.slice()
+    : FC_FSRS_DEFAULT_W.slice();
+  if (logs.length < 50) return { fsrs_w: baseW };
 
-  // Simple online gradient-style heuristic:
-  // overconfidence => shorten future intervals by reducing recall-growth weights
-  // and increasing lapse penalty; underconfidence => opposite direction.
-  const learningRate = 0.015;
-  const err = Math.max(-0.2, Math.min(0.2, metrics.mean_signed_error));
-  const nextW = baseW.slice();
+  // Cap sample size to keep per-optimise runtime bounded (3 passes × 9 indices × 2 signs = 54 replay runs at most).
+  const sampleLogs = logs.length > 2000 ? logs.slice(logs.length - 2000) : logs;
 
-  // Recall-growth related terms
-  nextW[8] = fcClampWeight(nextW[8] + learningRate * err * 3.0);
-  nextW[9] = fcClampWeight(nextW[9] - learningRate * err * 2.0);
-  nextW[10] = fcClampWeight(nextW[10] + learningRate * err * 3.0);
-  nextW[15] = fcClampWeight(nextW[15] + learningRate * err * 1.5);
-  nextW[16] = fcClampWeight(nextW[16] + learningRate * err * 1.5);
+  const initial = fcReplayLogsWithWeights(sampleLogs, baseW);
+  if (!initial) return { fsrs_w: baseW };
 
-  // Lapse branch terms (invert direction vs success branch)
-  nextW[11] = fcClampWeight(nextW[11] - learningRate * err * 2.0);
-  nextW[14] = fcClampWeight(nextW[14] - learningRate * err * 2.0);
+  // w[8..16] govern recall-growth and lapse stability; w[0..7] are data-sparse initial params.
+  const OPTIMIZE_IDX = [8, 9, 10, 11, 12, 13, 14, 15, 16];
+  const DELTA = 0.05;
+  const PASSES = 3;
 
-  // Conservative smooth update: blend with existing weights.
-  const blend = 0.35;
-  for (let i = 0; i < nextW.length; i++) {
-    nextW[i] = fcClampWeight(baseW[i] * (1 - blend) + nextW[i] * blend);
+  let bestW = baseW.slice();
+  let bestBrier = initial.brier;
+
+  for (let pass = 0; pass < PASSES; pass++) {
+    for (const idx of OPTIMIZE_IDX) {
+      for (const sign of [1, -1]) {
+        const candidate = bestW.slice();
+        candidate[idx] = fcClampWeight(candidate[idx] + sign * DELTA);
+        const result = fcReplayLogsWithWeights(sampleLogs, candidate);
+        if (result && Number.isFinite(result.brier) && result.brier < bestBrier) {
+          bestW = candidate;
+          bestBrier = result.brier;
+        }
+      }
+    }
   }
-  return { fsrs_w: nextW };
+
+  return { fsrs_w: bestW };
 }
 
 function fcEvaluateCalibration() {
@@ -1359,8 +1446,8 @@ function fcEvaluateCalibration() {
   const logs = dataset.review_logs || [];
   // Stored-retrievability metrics (quick live view)
   const stored = fcCalibrationMetricsFromLogs(logs);
-  // Replay metrics using current weights (true scoring)
-  const replay = fcReplayBrierScore(logs, fcSettings.fsrs_w);
+  // Replay metrics using current weights (true per-card trajectory scoring)
+  const replay = fcReplayLogsWithWeights(logs, fcSettings.fsrs_w);
   const data = fcLoadData();
   fcEnsureMeta(data);
   const history = data.meta.calibration_history || [];
@@ -1438,14 +1525,14 @@ function fcAutoCalibrateMaybe(data) {
         settings: fcSettings,
         review_logs: scopedLogs
       })
-      : fcDefaultCalibrationOptimizer({
+      : fcCoordinateDescentOptimizer({
       exported_at: new Date().toISOString(),
       settings: fcSettings,
       review_logs: scopedLogs
     });
     if (!optimizerOutput || !fcValidWeightsArray(optimizerOutput.fsrs_w)) return false;
-    // True before-score: replay with current (old) weights before overwriting them.
-    const replayBefore = fcReplayBrierScore(scopedLogs, fcSettings.fsrs_w);
+    // True before-score: replay trajectories with current (old) weights before overwriting them.
+    const replayBefore = fcReplayLogsWithWeights(scopedLogs, fcSettings.fsrs_w);
     const normalized = fcNormalizeSettings({ ...fcSettings, fsrs_w: optimizerOutput.fsrs_w });
     fcSettings = normalized;
     try {
@@ -1453,8 +1540,8 @@ function fcAutoCalibrateMaybe(data) {
     } catch (e) {
       return false;
     }
-    // True after-score: replay with new weights on the same logs.
-    const replayAfter = fcReplayBrierScore(scopedLogs, normalized.fsrs_w);
+    // True after-score: replay trajectories with new weights on the same logs.
+    const replayAfter = fcReplayLogsWithWeights(scopedLogs, normalized.fsrs_w);
     data.meta.calibration_history.push({
       ts: new Date().toISOString(),
       day_key: key,
@@ -1466,7 +1553,7 @@ function fcAutoCalibrateMaybe(data) {
       mse_before: replayBefore ? replayBefore.mean_signed_error : null,
       mse_after: replayAfter ? replayAfter.mean_signed_error : null,
       success_rate: replayBefore ? replayBefore.success_rate : null,
-      optimizer: (typeof hook === "function") ? "external_hook" : "builtin_default",
+      optimizer: (typeof hook === "function") ? "external_hook" : "builtin_coord_descent",
       brier_delta: (replayBefore && replayAfter) ? Math.round((replayAfter.brier - replayBefore.brier) * 1000000) / 1000000 : null
     });
     if (data.meta.calibration_history.length > 100) {
@@ -1531,7 +1618,7 @@ function fcRunCalibrationHook() {
     const hook = window && window.FC_CALIBRATION_HOOK;
     const output = (typeof hook === "function")
       ? hook(fcBuildCalibrationDataset())
-      : fcDefaultCalibrationOptimizer(fcBuildCalibrationDataset());
+      : fcCoordinateDescentOptimizer(fcBuildCalibrationDataset());
     if (!output || !fcValidWeightsArray(output.fsrs_w)) {
       fcUpdateSessionUi("Calibration hook returned invalid weights");
       return;
@@ -1750,7 +1837,7 @@ function fcRenderCards(data) {
       '<div class="fc-row" onclick="fcStartReview(\'' + nameArg + '\')">' +
         '<div class="fc-info">' +
           '<div class="fc-name">' + safeName + "</div>" +
-          '<div class="fc-meta">' + safePrompt + " · reps: " + card.reps + " · lapses: " + card.lapses + " · S: " + (card.stability / FC_DAY_SECONDS).toFixed(2) + "d · D: " + card.difficulty.toFixed(2) + " · R: " + retPct + "% · interval: " + card.interval_days.toFixed(2) + "d</div>" +
+          '<div class="fc-meta">' + safePrompt + " · reps: " + card.reps + " · lapses: " + card.lapses + " · S: " + card.stability.toFixed(2) + "d · D: " + card.difficulty.toFixed(2) + " · R: " + retPct + "% · interval: " + card.interval_days.toFixed(2) + "d</div>" +
         "</div>" +
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">' +
           '<span class="fc-badge ' + ((isLeechSuspended || isLeechWatch) ? "fc-badge-soon" : badgeClass) + '">' + badgeText + "</span>" +
@@ -1861,6 +1948,11 @@ function fcApplyGrade(name, rating) {
   const suggested = activeBtn ? Number(String(activeBtn.id).replace("fcRate", "")) : null;
   if (Number.isFinite(suggested) && suggested !== rating) data.meta.behavior.manual_grade_changes += 1;
   const wasNew = (card.reps || 0) === 0;
+  const lastReviewMs = new Date(card.last_review).getTime();
+  const actualElapsedDays = Number.isFinite(lastReviewMs)
+    ? Math.max(0, (Date.now() - lastReviewMs) / (1000 * FC_DAY_SECONDS))
+    : 0;
+  const scheduledIntervalDays = Number.isFinite(card.interval_days) ? Math.max(0, card.interval_days) : 0;
   const updateInfo = fcUpdateCard(card, rating);
   fcUpdateStruggleSignals(card, rating);
   data.meta.reviews_done += 1;
@@ -1871,11 +1963,14 @@ function fcApplyGrade(name, rating) {
     card: name,
     grade: rating,
     was_new: wasNew,
+    actual_elapsed_days: Math.round(actualElapsedDays * 10000) / 10000,
+    scheduled_interval_days: Math.round(scheduledIntervalDays * 10000) / 10000,
+    delay_days: Math.round((actualElapsedDays - scheduledIntervalDays) * 10000) / 10000,
     prev_interval_days: updateInfo.prev_interval_days,
     prev_stability_days: updateInfo.prev_stability_days,
     retrievability: Math.round(updateInfo.retrievability * 10000) / 10000,
     next_interval_days: card.interval_days,
-    next_stability_days: Math.round((card.stability / FC_DAY_SECONDS) * 1000) / 1000,
+    next_stability_days: Math.round(card.stability * 1000) / 1000,
     difficulty: card.difficulty,
     leech_action: leechAction.type
   });
