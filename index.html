@@ -1,0 +1,1987 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Memory Model Suite</title>
+
+<style>
+body { font-family: Arial, sans-serif; background: #0f1115; color: #eaeaea; padding: 20px; }
+.container { max-width: 900px; margin: auto; }
+h2 { margin-bottom: 10px; }
+.suite-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.suite-tab {
+  border: 1px solid #2f3441;
+  background: #141821;
+  color: #d5d7df;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.suite-tab.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+.suite-view { display: none; }
+.suite-view.active { display: block; }
+textarea {
+  width: 100%;
+  height: 120px;
+  margin-top: 10px;
+  background: #1a1d24;
+  color: #fff;
+  border: 1px solid #333;
+  padding: 10px;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+button {
+  margin-top: 10px;
+  margin-right: 8px;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: white;
+  cursor: pointer;
+}
+button.secondary { background: #4b5563; }
+.card {
+  background: #1a1d24;
+  padding: 15px;
+  border-radius: 10px;
+  margin-top: 15px;
+}
+.small { font-size: 12px; color: #aaa; }
+.error { color: #f87171; margin-top: 8px; min-height: 18px; }
+
+/* Forgetting-curve module styles (prefixed with fc-) */
+.fc-root { margin-top: 15px; }
+.fc-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.2rem; }
+.fc-header h3 { font-size: 18px; font-weight: 600; color: #f3f4f6; }
+.fc-header-actions { display: flex; gap: 8px; align-items: center; }
+.fc-session-status { font-size: 12px; color: #93c5fd; }
+.fc-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 1.2rem; }
+.fc-stat { background: #1a1d24; border-radius: 10px; padding: 0.75rem 1rem; border: 1px solid #2b3040; }
+.fc-stat-label { font-size: 12px; color: #9ca3af; margin-bottom: 4px; }
+.fc-stat-value { font-size: 20px; font-weight: 600; color: #f3f4f6; }
+.fc-nav { display: flex; gap: 6px; margin-bottom: 1rem; }
+.fc-tab {
+  padding: 6px 14px;
+  font-size: 13px;
+  border: 1px solid #2f3441;
+  border-radius: 20px;
+  background: transparent;
+  color: #c4c8d3;
+  cursor: pointer;
+}
+.fc-tab.active { background: #f3f4f6; color: #111827; border-color: #f3f4f6; }
+.fc-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1rem; }
+.fc-row {
+  background: #141821;
+  border: 1px solid #2b3040;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+.fc-row:hover { border-color: #4b5563; }
+.fc-info { flex: 1; }
+.fc-name { font-size: 15px; font-weight: 600; color: #f3f4f6; margin-bottom: 3px; }
+.fc-meta { font-size: 12px; color: #9ca3af; }
+.fc-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+.fc-badge-due { background: #3c1f22; color: #fca5a5; }
+.fc-badge-soon { background: #3a2f1c; color: #fcd34d; }
+.fc-badge-ok { background: #1f3624; color: #86efac; }
+.fc-ret-bar { width: 80px; height: 6px; background: #30384b; border-radius: 3px; overflow: hidden; }
+.fc-ret-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.fc-panel { background: #141821; border: 1px solid #2b3040; border-radius: 12px; padding: 1.2rem; }
+.fc-panel-title { font-size: 16px; font-weight: 600; color: #f3f4f6; margin-bottom: 4px; }
+.fc-panel-prompt { font-size: 13px; color: #9ca3af; margin-bottom: 0.9rem; }
+.fc-textarea { height: 160px; }
+.fc-btn-row { display: flex; gap: 10px; margin-top: 1rem; }
+.fc-rate-row { display: grid; gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 10px; }
+.fc-rate-btn {
+  margin-top: 0;
+  margin-right: 0;
+  border: 1px solid #4b5563;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #11151e;
+  color: #d1d5db;
+  font-size: 12px;
+  font-weight: 600;
+}
+.fc-rate-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.fc-rate-btn.active { border-color: #93c5fd; color: #dbeafe; background: #1e293b; }
+.fc-btn-primary {
+  flex: 1;
+  padding: 10px;
+  background: #f3f4f6;
+  color: #111827;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.fc-btn-secondary {
+  padding: 10px 16px;
+  background: transparent;
+  color: #d1d5db;
+  border: 1px solid #4b5563;
+  border-radius: 8px;
+}
+.fc-grade-result { margin-top: 1rem; padding: 1rem; border-radius: 8px; font-size: 14px; display: none; }
+.fc-grade-2 { background: #1f3624; color: #86efac; }
+.fc-grade-1 { background: #3a2f1c; color: #fcd34d; }
+.fc-grade-0 { background: #3c1f22; color: #fca5a5; }
+.fc-answer-reveal {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #11151e;
+  border-radius: 8px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  color: #9ca3af;
+  white-space: pre-wrap;
+  display: none;
+}
+.fc-add-form {
+  background: #141821;
+  border: 1px solid #2b3040;
+  border-radius: 12px;
+  padding: 1.1rem;
+  margin-bottom: 1rem;
+  display: none;
+}
+.fc-field { margin-bottom: 0.9rem; }
+.fc-field label { display: block; font-size: 12px; color: #9ca3af; margin-bottom: 6px; }
+.fc-field input, .fc-field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #3a4152;
+  border-radius: 8px;
+  background: #11151e;
+  color: #f3f4f6;
+  font-size: 14px;
+  outline: none;
+}
+.fc-field textarea { font-family: Consolas, monospace; font-size: 13px; height: 100px; resize: vertical; }
+.fc-empty { text-align: center; padding: 1.5rem; color: #9ca3af; font-size: 14px; }
+.fc-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.fc-modal.active { display: flex; }
+.fc-modal-card {
+  width: min(560px, calc(100vw - 32px));
+  background: #141821;
+  border: 1px solid #2b3040;
+  border-radius: 12px;
+  padding: 16px;
+}
+.fc-modal-title { font-size: 18px; font-weight: 600; color: #f3f4f6; margin-bottom: 8px; }
+.fc-modal-text { color: #d1d5db; font-size: 14px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>Memory Model Suite</h2>
+  <div class="suite-tabs">
+    <button class="suite-tab active" onclick="setSuiteView('meanField', this)">Mean-Field</button>
+    <button class="suite-tab" onclick="setSuiteView('forgettingCurve', this)">Forgetting Curve</button>
+  </div>
+
+  <div id="view-meanField" class="suite-view active">
+    <div class="card">
+      <div><b>State Vector (x)</b></div>
+      <div class="small">Enter 8 numbers in (-1,1), separated by spaces.</div>
+      <textarea id="stateBox"></textarea>
+      <div id="stateError" class="small error"></div>
+      <button onclick="step()">Run Step</button>
+      <button class="secondary" onclick="randomizeState()">Randomize State</button>
+    </div>
+
+    <div class="card">
+      <div><b>Energy Log</b></div>
+      <div id="energyLog" class="small"></div>
+    </div>
+  </div>
+
+  <div id="view-forgettingCurve" class="suite-view">
+    <div class="fc-root">
+      <div class="fc-header">
+        <h3>Forgetting Curve Engine</h3>
+        <div class="fc-header-actions">
+          <span id="fcSessionStatus" class="fc-session-status"></span>
+          <button class="fc-btn-secondary" onclick="fcSnoozeBackupReminder()" id="fcSnoozeReminderBtn" style="font-size:13px;padding:6px 14px;display:none;">Remind me tomorrow</button>
+          <button class="fc-btn-secondary" onclick="fcExportBackup()" id="fcExportBtn" style="font-size:13px;padding:6px 14px;">Export backup</button>
+          <button class="fc-btn-secondary" onclick="fcPickImportBackup()" id="fcImportBtn" style="font-size:13px;padding:6px 14px;">Import backup</button>
+          <button class="fc-btn-secondary" type="button" id="fcSnapshotsBtn" style="font-size:13px;padding:6px 14px;">Snapshots</button>
+          <button class="fc-btn-secondary" type="button" id="fcSettingsBtn" style="font-size:13px;padding:6px 14px;">Settings</button>
+          <button class="fc-btn-secondary" onclick="fcReviewNextDue()" id="fcNextDueBtn" style="font-size:13px;padding:6px 14px;">Review next due</button>
+          <button class="fc-btn-secondary" onclick="fcStartDueSession()" id="fcStartSessionBtn" style="font-size:13px;padding:6px 14px;">Review due only</button>
+          <button class="fc-btn-secondary" onclick="fcStopDueSession()" id="fcStopSessionBtn" style="font-size:13px;padding:6px 14px;display:none;">End session</button>
+          <button class="fc-btn-secondary" type="button" id="fcAddBtn" style="font-size:13px;padding:6px 14px;" onclick="fcToggleAdd()">+ add card</button>
+        </div>
+      </div>
+
+      <div class="fc-add-form" id="fcSettingsForm">
+        <div class="fc-field"><label>Daily review limit</label><input id="fcSettingReviewLimit" type="number" min="1" max="500" /></div>
+        <div class="fc-field"><label>Daily new-card limit</label><input id="fcSettingNewLimit" type="number" min="0" max="200" /></div>
+        <div class="fc-field"><label>Max session queue</label><input id="fcSettingMaxSessionQueue" type="number" min="5" max="200" /></div>
+        <div class="fc-field"><label>Target retention (0.85 - 0.90)</label><input id="fcSettingTargetRetention" type="number" min="0.85" max="0.90" step="0.01" /></div>
+        <div class="fc-field"><label><input id="fcSettingAutoCalibrationEnabled" type="checkbox" /> Enable auto calibration loop</label></div>
+        <div class="fc-field"><label>Auto calibration minimum reviews</label><input id="fcSettingAutoCalibrationMinReviews" type="number" min="50" max="5000" /></div>
+        <div class="fc-field"><label>Auto calibration window (days)</label><input id="fcSettingAutoCalibrationWindowDays" type="number" min="7" max="180" /></div>
+        <div class="fc-field"><label>Leech lapse threshold</label><input id="fcSettingLeechLapseThreshold" type="number" min="3" max="50" /></div>
+        <div class="fc-field"><label>Leech suspend days (lapse trigger)</label><input id="fcSettingLeechSuspendDays" type="number" min="1" max="90" /></div>
+        <div class="fc-field"><label>Mixed-struggle minimum reviews</label><input id="fcSettingMixedStruggleMinReviews" type="number" min="5" max="100" /></div>
+        <div class="fc-field"><label>Mixed-struggle cooldown days</label><input id="fcSettingMixedStruggleCooldownDays" type="number" min="1" max="30" /></div>
+        <div class="fc-field"><label>Watch mode max cards per session</label><input id="fcSettingWatchModeMaxPerSession" type="number" min="1" max="50" /></div>
+        <div class="fc-field"><label>Watch mode max queue share (0.00 - 1.00)</label><input id="fcSettingWatchModeMaxShare" type="number" min="0.00" max="1.00" step="0.05" /></div>
+        <div class="fc-field"><label>Watch starvation guard (days overdue to bypass cap)</label><input id="fcSettingWatchStarvationDays" type="number" min="0.5" max="30" step="0.5" /></div>
+        <div class="fc-field"><label>Backup reminder interval (days, 0 to disable)</label><input id="fcSettingBackupReminderDays" type="number" min="0" max="365" step="1" /></div>
+        <div class="fc-field"><label><input id="fcSettingHardReminderEnabled" type="checkbox" /> Enable hard overdue popup reminder</label></div>
+        <div class="fc-field"><label>Hard reminder threshold (days overdue)</label><input id="fcSettingHardReminderDays" type="number" min="1" max="365" step="1" /></div>
+        <div class="fc-field"><label>FSRS w coefficients (comma-separated, 17 values)</label><textarea id="fcSettingFsrsWeights" style="height:72px;"></textarea></div>
+        <div class="fc-field"><label>Snapshot history limit</label><input id="fcSettingSnapshotLimit" type="number" min="5" max="100" /></div>
+        <div style="display:flex;gap:10px;">
+          <button class="fc-btn-primary" onclick="fcSaveSettings()">Save settings</button>
+          <button class="fc-btn-secondary" onclick="fcExportCalibrationData()">Export review logs</button>
+          <button class="fc-btn-secondary" onclick="fcRunCalibrationHook()">Run calibration hook</button>
+          <button class="fc-btn-secondary" onclick="fcEvaluateCalibration()">Evaluate calibration</button>
+          <button class="fc-btn-secondary" onclick="fcToggleSettings()">Close</button>
+        </div>
+        <div id="fcCalibrationInfo" class="small" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="fc-add-form" id="fcSnapshotsForm">
+        <div id="fcSnapshotsList" class="fc-empty">No snapshots yet.</div>
+      </div>
+
+      <div class="fc-add-form" id="fcAddForm">
+        <div class="fc-field"><label>Card name</label><input id="fcNewName" placeholder="e.g. Full block" /></div>
+        <div class="fc-field"><label>Prompt</label><input id="fcNewPrompt" placeholder="e.g. Recall full sequence" /></div>
+        <div class="fc-field"><label>Answer</label><textarea id="fcNewAnswer" placeholder="Enter the content to memorize..."></textarea></div>
+        <div style="display:flex;gap:10px;">
+          <button class="fc-btn-primary" type="button" id="fcAddCardSubmitBtn" onclick="fcAddCard()">Add card</button>
+          <button class="fc-btn-secondary" type="button" id="fcAddCardCancelBtn" onclick="fcToggleAdd()">Cancel</button>
+        </div>
+      </div>
+
+      <div class="fc-stats" id="fcStatsBar"></div>
+
+      <div class="fc-nav">
+        <button class="fc-tab active" onclick="fcSetTab('all', this)">All</button>
+        <button class="fc-tab" onclick="fcSetTab('due', this)">Due now</button>
+        <button class="fc-tab" onclick="fcSetTab('ok', this)">Learned</button>
+      </div>
+
+      <div id="fcCardList" class="fc-list"></div>
+      <div id="fcReviewPanel" style="display:none;"></div>
+      <input id="fcImportFile" type="file" accept=".json,application/json" style="display:none;" onchange="fcImportBackup(event)" />
+    </div>
+    <div id="fcHardReminderModal" class="fc-modal">
+      <div class="fc-modal-card">
+        <div class="fc-modal-title">Backup overdue</div>
+        <div id="fcHardReminderText" class="fc-modal-text"></div>
+        <div style="display:flex;gap:10px;margin-top:12px;">
+          <button class="fc-btn-primary" onclick="fcExportBackupFromModal()">Export backup now</button>
+          <button class="fc-btn-secondary" onclick="fcSnoozeHardReminder()">Remind me tomorrow</button>
+          <button class="fc-btn-secondary" onclick="fcCloseHardReminder()">Dismiss</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function setSuiteView(view, btn) {
+  document.querySelectorAll(".suite-view").forEach((v) => v.classList.remove("active"));
+  document.querySelectorAll(".suite-tab").forEach((b) => b.classList.remove("active"));
+  document.getElementById("view-" + view).classList.add("active");
+  btn.classList.add("active");
+}
+
+// -----------------------------
+// Mean-field memory engine
+// -----------------------------
+const N = 8;
+const beta = 2.0;
+const eta = 0.05;
+
+function clampToOpenUnit(v) {
+  return Math.max(-0.999, Math.min(0.999, v));
+}
+
+function createSymmetricWeights(n) {
+  const M = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const val = (Math.random() * 2 - 1) * 0.5;
+      M[i][j] = val;
+      M[j][i] = val;
+    }
+  }
+  return M;
+}
+
+const W = createSymmetricWeights(N);
+const b = Array.from({ length: N }, () => Math.random() * 0.2 - 0.1);
+let x = Array.from({ length: N }, () => Math.random() * 0.2 - 0.1);
+
+function renderState() {
+  document.getElementById("stateBox").value = x.map((v) => v.toFixed(4)).join(" ");
+}
+
+function showStateError(msg) {
+  document.getElementById("stateError").textContent = msg;
+}
+
+function parseStateFromInput() {
+  const raw = document.getElementById("stateBox").value.trim();
+  if (!raw) {
+    showStateError("State vector is empty.");
+    return null;
+  }
+
+  const values = raw.split(/\s+/).map(Number);
+  if (values.length !== N) {
+    showStateError("Expected " + N + " values, got " + values.length + ".");
+    return null;
+  }
+
+  for (let i = 0; i < values.length; i++) {
+    if (!Number.isFinite(values[i])) {
+      showStateError("Invalid number at position " + (i + 1) + ".");
+      return null;
+    }
+  }
+
+  showStateError("");
+  return values.map(clampToOpenUnit);
+}
+
+function entropy(xi) {
+  const c = clampToOpenUnit(xi);
+  return ((1 + c) / 2) * Math.log((1 + c) / 2) + ((1 - c) / 2) * Math.log((1 - c) / 2);
+}
+
+function energy(vec) {
+  let E = 0;
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      E += -0.5 * vec[i] * W[i][j] * vec[j];
+    }
+  }
+  for (let i = 0; i < N; i++) {
+    E += -b[i] * vec[i];
+  }
+  for (let i = 0; i < N; i++) {
+    E += (1 / beta) * entropy(vec[i]);
+  }
+  return E;
+}
+
+function step() {
+  const parsed = parseStateFromInput();
+  if (!parsed) return;
+  x = parsed;
+
+  const dx = new Array(N);
+  for (let i = 0; i < N; i++) {
+    const xi = clampToOpenUnit(x[i]);
+    let wx = 0;
+    for (let j = 0; j < N; j++) {
+      wx += W[i][j] * x[j];
+    }
+    const gradEntropy = (1 / (2 * beta)) * Math.log((1 + xi) / (1 - xi));
+    dx[i] = wx + b[i] - gradEntropy;
+  }
+
+  for (let i = 0; i < N; i++) {
+    x[i] = clampToOpenUnit(x[i] + eta * dx[i]);
+  }
+
+  renderState();
+  logEnergy();
+}
+
+function logEnergy() {
+  const e = energy(x);
+  document.getElementById("energyLog").innerText = "Energy: " + e.toFixed(6);
+}
+
+function randomizeState() {
+  x = Array.from({ length: N }, () => Math.random() * 0.2 - 0.1);
+  showStateError("");
+  renderState();
+  logEnergy();
+}
+
+// -----------------------------
+// Forgetting curve engine
+// -----------------------------
+const FC_STORAGE_KEY = "memory_engine";
+const FC_SNAPSHOT_KEY = "memory_engine_snapshots";
+const FC_SETTINGS_KEY = "memory_engine_settings";
+const FC_DAY_SECONDS = 24 * 60 * 60;
+const FC_REVIEW_LOG_LIMIT = 5000;
+const FC_FSRS_DEFAULT_W = [
+  0.57, 1.44, 4.14, 10.94,
+  5.14, 1.20, 0.94, 0.86,
+  0.01, 1.49, 0.14, 0.94,
+  2.18, 0.05, 0.34, 1.26, 0.29
+];
+const FC_DEFAULTS = {
+  daily_review_limit: 40,
+  daily_new_limit: 15,
+  max_session_queue: 30,
+  auto_calibration_enabled: true,
+  auto_calibration_min_reviews: 200,
+  auto_calibration_window_days: 30,
+  leech_lapse_threshold: 8,
+  leech_suspend_days: 7,
+  mixed_struggle_min_reviews: 10,
+  mixed_struggle_cooldown_days: 2,
+  watch_mode_max_per_session: 4,
+  watch_mode_max_share: 0.35,
+  watch_starvation_days: 3,
+  max_snapshots: 20,
+  target_retention: 0.9,
+  backup_reminder_days: 7,
+  hard_reminder_enabled: false,
+  hard_reminder_days: 14,
+  backup_last_export_at: "",
+  backup_snooze_until: "",
+  fsrs_w: FC_FSRS_DEFAULT_W
+};
+let fcCurrentTab = "all";
+let fcReviewing = null;
+let fcSessionActive = false;
+let fcSessionQueue = [];
+let fcSessionTotal = 0;
+let fcSettings = { ...FC_DEFAULTS };
+let fcHardReminderCheckedOnce = false;
+
+const fcDefaultCards = {
+  "Full Block": {
+    prompt: "Recall full sequence",
+    answer: "CIB DE DAI HFE\n\nEHX RNQ EAM TZ\n\nIFK LGK FGLL\n\nERI CCS BAUY\n\nEBS CCF OKH BEHJ\n\nHOT RWW WAT XSTV\n\nABE IJJ ILJ CCQP\n\nRHM SCW PKQ GSAS",
+    stability: 12.0,
+    difficulty: 2.5,
+    last_review: new Date().toISOString(),
+    next_due: new Date().toISOString(),
+    reps: 0,
+    lapses: 0
+  }
+};
+
+function fcLoadData() {
+  function buildFreshData() {
+    const fresh = { cards: JSON.parse(JSON.stringify(fcDefaultCards)), meta: {} };
+    fcEnsureMeta(fresh);
+    Object.entries(fresh.cards).forEach(([name, card]) => {
+      if (!card || typeof card !== "object") {
+        delete fresh.cards[name];
+        return;
+      }
+      fcNormalizeCard(card);
+    });
+    return fresh;
+  }
+
+  try {
+    const raw = localStorage.getItem(FC_STORAGE_KEY);
+    if (!raw) {
+      return buildFreshData();
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !parsed.cards) {
+      return buildFreshData();
+    }
+    fcEnsureMeta(parsed);
+    Object.entries(parsed.cards).forEach(([name, card]) => {
+      if (!card || typeof card !== "object") {
+        delete parsed.cards[name];
+        return;
+      }
+      try {
+        fcNormalizeCard(card);
+      } catch (e) {
+        delete parsed.cards[name];
+      }
+    });
+    return parsed;
+  } catch (e) {
+    return buildFreshData();
+  }
+}
+
+function fcSaveData(d) {
+  try {
+    fcCreateSnapshot();
+    localStorage.setItem(FC_STORAGE_KEY, JSON.stringify(d));
+    return true;
+  } catch (e) {
+    fcUpdateSessionUi("Save failed: browser storage quota exceeded.");
+    return false;
+  }
+}
+
+function fcLoadSettings() {
+  try {
+    const raw = localStorage.getItem(FC_SETTINGS_KEY);
+    if (!raw) return { ...FC_DEFAULTS };
+    const parsed = JSON.parse(raw);
+    return fcNormalizeSettings(parsed);
+  } catch (e) {
+    return { ...FC_DEFAULTS };
+  }
+}
+
+function fcNormalizeSettings(s) {
+  const parsedW = fcParseWeightsString(s && s.fsrs_w);
+  const out = {
+    daily_review_limit: Number.isFinite(Number(s && s.daily_review_limit)) ? Number(s.daily_review_limit) : FC_DEFAULTS.daily_review_limit,
+    daily_new_limit: Number.isFinite(Number(s && s.daily_new_limit)) ? Number(s.daily_new_limit) : FC_DEFAULTS.daily_new_limit,
+    max_session_queue: Number.isFinite(Number(s && s.max_session_queue)) ? Number(s.max_session_queue) : FC_DEFAULTS.max_session_queue,
+    auto_calibration_enabled: Boolean((s && s.auto_calibration_enabled) ?? FC_DEFAULTS.auto_calibration_enabled),
+    auto_calibration_min_reviews: Number.isFinite(Number(s && s.auto_calibration_min_reviews)) ? Number(s.auto_calibration_min_reviews) : FC_DEFAULTS.auto_calibration_min_reviews,
+    auto_calibration_window_days: Number.isFinite(Number(s && s.auto_calibration_window_days)) ? Number(s.auto_calibration_window_days) : FC_DEFAULTS.auto_calibration_window_days,
+    leech_lapse_threshold: Number.isFinite(Number(s && s.leech_lapse_threshold)) ? Number(s.leech_lapse_threshold) : FC_DEFAULTS.leech_lapse_threshold,
+    leech_suspend_days: Number.isFinite(Number(s && s.leech_suspend_days)) ? Number(s.leech_suspend_days) : FC_DEFAULTS.leech_suspend_days,
+    mixed_struggle_min_reviews: Number.isFinite(Number(s && s.mixed_struggle_min_reviews)) ? Number(s.mixed_struggle_min_reviews) : FC_DEFAULTS.mixed_struggle_min_reviews,
+    mixed_struggle_cooldown_days: Number.isFinite(Number(s && s.mixed_struggle_cooldown_days)) ? Number(s.mixed_struggle_cooldown_days) : FC_DEFAULTS.mixed_struggle_cooldown_days,
+    watch_mode_max_per_session: Number.isFinite(Number(s && s.watch_mode_max_per_session)) ? Number(s.watch_mode_max_per_session) : FC_DEFAULTS.watch_mode_max_per_session,
+    watch_mode_max_share: Number.isFinite(Number(s && s.watch_mode_max_share)) ? Number(s.watch_mode_max_share) : FC_DEFAULTS.watch_mode_max_share,
+    watch_starvation_days: Number.isFinite(Number(s && s.watch_starvation_days)) ? Number(s.watch_starvation_days) : FC_DEFAULTS.watch_starvation_days,
+    max_snapshots: Number.isFinite(Number(s && s.max_snapshots)) ? Number(s.max_snapshots) : FC_DEFAULTS.max_snapshots,
+    target_retention: Number.isFinite(Number(s && s.target_retention)) ? Number(s.target_retention) : FC_DEFAULTS.target_retention,
+    backup_reminder_days: Number.isFinite(Number(s && s.backup_reminder_days)) ? Number(s.backup_reminder_days) : FC_DEFAULTS.backup_reminder_days,
+    hard_reminder_enabled: Boolean(s && s.hard_reminder_enabled),
+    hard_reminder_days: Number.isFinite(Number(s && s.hard_reminder_days)) ? Number(s.hard_reminder_days) : FC_DEFAULTS.hard_reminder_days,
+    backup_last_export_at: typeof (s && s.backup_last_export_at) === "string" ? s.backup_last_export_at : FC_DEFAULTS.backup_last_export_at,
+    backup_snooze_until: typeof (s && s.backup_snooze_until) === "string" ? s.backup_snooze_until : FC_DEFAULTS.backup_snooze_until,
+    fsrs_w: parsedW || FC_FSRS_DEFAULT_W.slice()
+  };
+  out.daily_review_limit = Math.max(1, Math.min(500, Math.round(out.daily_review_limit)));
+  out.daily_new_limit = Math.max(0, Math.min(200, Math.round(out.daily_new_limit)));
+  out.max_session_queue = Math.max(5, Math.min(200, Math.round(out.max_session_queue)));
+  out.auto_calibration_min_reviews = Math.max(50, Math.min(5000, Math.round(out.auto_calibration_min_reviews)));
+  out.auto_calibration_window_days = Math.max(7, Math.min(180, Math.round(out.auto_calibration_window_days)));
+  out.leech_lapse_threshold = Math.max(3, Math.min(50, Math.round(out.leech_lapse_threshold)));
+  out.leech_suspend_days = Math.max(1, Math.min(90, Math.round(out.leech_suspend_days)));
+  out.mixed_struggle_min_reviews = Math.max(5, Math.min(100, Math.round(out.mixed_struggle_min_reviews)));
+  out.mixed_struggle_cooldown_days = Math.max(1, Math.min(30, Math.round(out.mixed_struggle_cooldown_days)));
+  out.watch_mode_max_per_session = Math.max(1, Math.min(50, Math.round(out.watch_mode_max_per_session)));
+  out.watch_mode_max_share = Math.max(0, Math.min(1.0, Number(out.watch_mode_max_share)));
+  out.watch_starvation_days = Math.max(0.5, Math.min(30, Number(out.watch_starvation_days)));
+  out.max_snapshots = Math.max(5, Math.min(100, Math.round(out.max_snapshots)));
+  out.target_retention = Math.max(0.85, Math.min(0.9, out.target_retention));
+  out.backup_reminder_days = Math.max(0, Math.min(365, Math.round(out.backup_reminder_days)));
+  out.hard_reminder_days = Math.max(1, Math.min(365, Math.round(out.hard_reminder_days)));
+  return out;
+}
+
+function fcParseWeightsString(value) {
+  if (Array.isArray(value) && value.length === 17 && value.every((n) => Number.isFinite(Number(n)))) {
+    return value.map((n) => Number(n));
+  }
+  if (typeof value !== "string") return null;
+  const pieces = value.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+  if (pieces.length !== 17) return null;
+  const nums = pieces.map(Number);
+  if (!nums.every((n) => Number.isFinite(n))) return null;
+  return nums;
+}
+
+function fcValidWeightsArray(value) {
+  return Array.isArray(value) && value.length === 17 && value.every((n) => Number.isFinite(Number(n)));
+}
+
+function fcSaveSettings() {
+  const parsedW = fcParseWeightsString(document.getElementById("fcSettingFsrsWeights").value);
+  if (!parsedW) {
+    fcUpdateSessionUi("Invalid w coefficients (need 17 numbers)");
+    return;
+  }
+  const next = fcNormalizeSettings({
+    daily_review_limit: Number(document.getElementById("fcSettingReviewLimit").value),
+    daily_new_limit: Number(document.getElementById("fcSettingNewLimit").value),
+    max_session_queue: Number(document.getElementById("fcSettingMaxSessionQueue").value),
+    auto_calibration_enabled: document.getElementById("fcSettingAutoCalibrationEnabled").checked,
+    auto_calibration_min_reviews: Number(document.getElementById("fcSettingAutoCalibrationMinReviews").value),
+    auto_calibration_window_days: Number(document.getElementById("fcSettingAutoCalibrationWindowDays").value),
+    leech_lapse_threshold: Number(document.getElementById("fcSettingLeechLapseThreshold").value),
+    leech_suspend_days: Number(document.getElementById("fcSettingLeechSuspendDays").value),
+    mixed_struggle_min_reviews: Number(document.getElementById("fcSettingMixedStruggleMinReviews").value),
+    mixed_struggle_cooldown_days: Number(document.getElementById("fcSettingMixedStruggleCooldownDays").value),
+    watch_mode_max_per_session: Number(document.getElementById("fcSettingWatchModeMaxPerSession").value),
+    watch_mode_max_share: Number(document.getElementById("fcSettingWatchModeMaxShare").value),
+    watch_starvation_days: Number(document.getElementById("fcSettingWatchStarvationDays").value),
+    max_snapshots: Number(document.getElementById("fcSettingSnapshotLimit").value),
+    target_retention: Number(document.getElementById("fcSettingTargetRetention").value),
+    backup_reminder_days: Number(document.getElementById("fcSettingBackupReminderDays").value),
+    hard_reminder_enabled: document.getElementById("fcSettingHardReminderEnabled").checked,
+    hard_reminder_days: Number(document.getElementById("fcSettingHardReminderDays").value),
+    backup_last_export_at: fcSettings.backup_last_export_at,
+    backup_snooze_until: fcSettings.backup_snooze_until,
+    fsrs_w: parsedW
+  });
+  fcSettings = next;
+  try {
+    localStorage.setItem(FC_SETTINGS_KEY, JSON.stringify(next));
+  } catch (e) {
+    fcUpdateSessionUi("Settings save failed: browser storage quota exceeded.");
+    return;
+  }
+  fcPruneSnapshots();
+  fcUpdateSessionUi("Settings saved");
+  fcUpdateBackupReminderUi();
+  fcRender();
+}
+
+function fcApplySettingsToForm() {
+  document.getElementById("fcSettingReviewLimit").value = String(fcSettings.daily_review_limit);
+  document.getElementById("fcSettingNewLimit").value = String(fcSettings.daily_new_limit);
+  document.getElementById("fcSettingMaxSessionQueue").value = String(fcSettings.max_session_queue);
+  document.getElementById("fcSettingAutoCalibrationEnabled").checked = Boolean(fcSettings.auto_calibration_enabled);
+  document.getElementById("fcSettingAutoCalibrationMinReviews").value = String(fcSettings.auto_calibration_min_reviews);
+  document.getElementById("fcSettingAutoCalibrationWindowDays").value = String(fcSettings.auto_calibration_window_days);
+  document.getElementById("fcSettingLeechLapseThreshold").value = String(fcSettings.leech_lapse_threshold);
+  document.getElementById("fcSettingLeechSuspendDays").value = String(fcSettings.leech_suspend_days);
+  document.getElementById("fcSettingMixedStruggleMinReviews").value = String(fcSettings.mixed_struggle_min_reviews);
+  document.getElementById("fcSettingMixedStruggleCooldownDays").value = String(fcSettings.mixed_struggle_cooldown_days);
+  document.getElementById("fcSettingWatchModeMaxPerSession").value = String(fcSettings.watch_mode_max_per_session);
+  document.getElementById("fcSettingWatchModeMaxShare").value = String(fcSettings.watch_mode_max_share);
+  document.getElementById("fcSettingWatchStarvationDays").value = String(fcSettings.watch_starvation_days);
+  document.getElementById("fcSettingSnapshotLimit").value = String(fcSettings.max_snapshots);
+  document.getElementById("fcSettingTargetRetention").value = String(fcSettings.target_retention);
+  document.getElementById("fcSettingBackupReminderDays").value = String(fcSettings.backup_reminder_days);
+  document.getElementById("fcSettingHardReminderEnabled").checked = Boolean(fcSettings.hard_reminder_enabled);
+  document.getElementById("fcSettingHardReminderDays").value = String(fcSettings.hard_reminder_days);
+  document.getElementById("fcSettingFsrsWeights").value = fcSettings.fsrs_w.join(", ");
+}
+
+function fcOverdueDaysFromLastExport() {
+  if (!fcSettings.backup_last_export_at) return Number.POSITIVE_INFINITY;
+  const elapsed = fcDaysBetweenIso(fcSettings.backup_last_export_at, new Date().toISOString());
+  if (!Number.isFinite(elapsed)) return Number.POSITIVE_INFINITY;
+  return elapsed;
+}
+
+function fcCloseHardReminder() {
+  const modal = document.getElementById("fcHardReminderModal");
+  if (modal) modal.classList.remove("active");
+  fcHardReminderCheckedOnce = true;
+}
+
+function fcShowHardReminderIfNeeded() {
+  const modal = document.getElementById("fcHardReminderModal");
+  const text = document.getElementById("fcHardReminderText");
+  if (!modal || !text) return;
+  if (!fcSettings.hard_reminder_enabled) {
+    modal.classList.remove("active");
+    return;
+  }
+  const overdueDays = fcOverdueDaysFromLastExport();
+  if (overdueDays < fcSettings.hard_reminder_days) {
+    modal.classList.remove("active");
+    return;
+  }
+  if (!Number.isFinite(overdueDays)) {
+    text.textContent = "You have not exported a backup yet. Please export now to avoid data loss.";
+  } else {
+    text.textContent = "Your last backup export was " + overdueDays + " day(s) ago. Please export now.";
+  }
+  modal.classList.add("active");
+}
+
+function fcExportBackupFromModal() {
+  fcExportBackup();
+  fcCloseHardReminder();
+}
+
+function fcSnoozeHardReminder() {
+  fcSnoozeBackupReminder();
+  fcHardReminderCheckedOnce = true;
+  fcCloseHardReminder();
+}
+
+function fcCreateSnapshot() {
+  try {
+    const currentRaw = localStorage.getItem(FC_STORAGE_KEY);
+    if (!currentRaw) return;
+    let snapshots = [];
+    const existing = localStorage.getItem(FC_SNAPSHOT_KEY);
+    if (existing) {
+      const parsed = JSON.parse(existing);
+      if (Array.isArray(parsed)) snapshots = parsed;
+    }
+    snapshots.push({
+      id: Date.now(),
+      timestamp: new Date().toISOString(),
+      data: currentRaw
+    });
+    if (snapshots.length > fcSettings.max_snapshots) {
+      snapshots = snapshots.slice(snapshots.length - fcSettings.max_snapshots);
+    }
+    localStorage.setItem(FC_SNAPSHOT_KEY, JSON.stringify(snapshots));
+  } catch (e) {}
+}
+
+function fcPruneSnapshots() {
+  try {
+    const existing = localStorage.getItem(FC_SNAPSHOT_KEY);
+    if (!existing) return;
+    const parsed = JSON.parse(existing);
+    if (!Array.isArray(parsed)) return;
+    const pruned = parsed.slice(Math.max(0, parsed.length - fcSettings.max_snapshots));
+    localStorage.setItem(FC_SNAPSHOT_KEY, JSON.stringify(pruned));
+  } catch (e) {}
+}
+
+function fcSafeParseData(raw) {
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== "object" || !parsed.cards || typeof parsed.cards !== "object") {
+    throw new Error("Invalid backup format");
+  }
+  const normalized = {
+    cards: parsed.cards,
+    meta: parsed.meta && typeof parsed.meta === "object" ? parsed.meta : {}
+  };
+  fcEnsureMeta(normalized);
+  Object.values(normalized.cards).forEach(fcNormalizeCard);
+  return normalized;
+}
+
+function fcDownloadText(filename, text) {
+  const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function fcExportBackup() {
+  const data = fcLoadData();
+  const payload = {
+    version: 3,
+    exported_at: new Date().toISOString(),
+    app: "memory_engine",
+    data: data,
+    settings: fcSettings
+  };
+  const stamp = fcTodayKey().replace(/-/g, "");
+  fcDownloadText("memory_engine_backup_" + stamp + ".json", JSON.stringify(payload, null, 2));
+  fcSettings.backup_last_export_at = new Date().toISOString();
+  fcSettings.backup_snooze_until = "";
+  try {
+    localStorage.setItem(FC_SETTINGS_KEY, JSON.stringify(fcSettings));
+  } catch (e) {
+    fcUpdateSessionUi("Backup exported, but reminder state could not be saved.");
+    return;
+  }
+  fcUpdateBackupReminderUi();
+  fcUpdateSessionUi("Backup exported");
+}
+
+function fcPickImportBackup() {
+  const input = document.getElementById("fcImportFile");
+  if (!input) return;
+  input.value = "";
+  input.click();
+}
+
+function fcImportBackup(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function onLoad() {
+    try {
+      const rawText = String(reader.result || "");
+      const parsedTop = JSON.parse(rawText);
+      const rawData = parsedTop && parsedTop.data ? JSON.stringify(parsedTop.data) : rawText;
+      const imported = fcSafeParseData(rawData);
+      const importedSettings = parsedTop && parsedTop.settings ? fcNormalizeSettings(parsedTop.settings) : null;
+      const proceed = window.confirm("Import backup and replace current data? A snapshot of current state will be kept.");
+      if (!proceed) return;
+      if (!fcSaveData(imported)) return;
+      if (importedSettings) {
+        fcSettings = importedSettings;
+        try {
+          localStorage.setItem(FC_SETTINGS_KEY, JSON.stringify(importedSettings));
+        } catch (e) {
+          fcUpdateSessionUi("Imported data saved, but settings could not be saved.");
+        }
+        fcApplySettingsToForm();
+      }
+      fcStopDueSession("Backup imported");
+      fcRender();
+    } catch (err) {
+      fcUpdateSessionUi("Import failed: invalid backup file");
+    }
+  };
+  reader.onerror = function onError() {
+    fcUpdateSessionUi("Import failed: could not read file");
+  };
+  reader.readAsText(file, "utf-8");
+}
+
+function fcToggleSettings() {
+  const form = document.getElementById("fcSettingsForm");
+  const isHidden = window.getComputedStyle(form).display === "none";
+  form.style.display = isHidden ? "block" : "none";
+  if (isHidden) {
+    document.getElementById("fcAddForm").style.display = "none";
+    document.getElementById("fcSnapshotsForm").style.display = "none";
+    fcApplySettingsToForm();
+    fcEvaluateCalibration();
+  }
+}
+
+function fcDaysBetweenIso(fromIso, toIso) {
+  const fromMs = new Date(fromIso).getTime();
+  const toMs = new Date(toIso).getTime();
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return Number.POSITIVE_INFINITY;
+  return Math.floor((toMs - fromMs) / (1000 * 60 * 60 * 24));
+}
+
+function fcBackupReminderMessage() {
+  const days = Number(fcSettings.backup_reminder_days) || 0;
+  if (days <= 0) return "";
+  const nowIso = new Date().toISOString();
+  const snoozeMs = new Date(fcSettings.backup_snooze_until || "").getTime();
+  if (Number.isFinite(snoozeMs) && snoozeMs > Date.now()) return "";
+  if (!fcSettings.backup_last_export_at) return "Backup reminder: you have never exported a backup.";
+  const elapsed = fcDaysBetweenIso(fcSettings.backup_last_export_at, nowIso);
+  if (!Number.isFinite(elapsed)) return "Backup reminder: export a backup soon.";
+  if (elapsed >= days) return "Backup reminder: last export was " + elapsed + " day(s) ago.";
+  return "";
+}
+
+function fcUpdateBackupReminderUi() {
+  const message = fcBackupReminderMessage();
+  const status = document.getElementById("fcSessionStatus");
+  const snoozeBtn = document.getElementById("fcSnoozeReminderBtn");
+  if (!status || !snoozeBtn) return;
+  if (!fcSessionActive && message) {
+    status.textContent = message;
+    snoozeBtn.style.display = "";
+  } else {
+    if (!fcSessionActive && status.textContent && status.textContent.startsWith("Backup reminder:")) {
+      status.textContent = "";
+    }
+    snoozeBtn.style.display = "none";
+  }
+  if (!fcHardReminderCheckedOnce) {
+    fcShowHardReminderIfNeeded();
+    fcHardReminderCheckedOnce = true;
+  }
+}
+
+function fcSnoozeBackupReminder() {
+  fcSettings.backup_snooze_until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  try {
+    localStorage.setItem(FC_SETTINGS_KEY, JSON.stringify(fcSettings));
+  } catch (e) {
+    fcUpdateSessionUi("Could not snooze reminder due to storage error.");
+    return;
+  }
+  fcUpdateBackupReminderUi();
+}
+
+function fcToggleSnapshots() {
+  const form = document.getElementById("fcSnapshotsForm");
+  const isHidden = window.getComputedStyle(form).display === "none";
+  form.style.display = isHidden ? "block" : "none";
+  if (isHidden) {
+    document.getElementById("fcAddForm").style.display = "none";
+    document.getElementById("fcSettingsForm").style.display = "none";
+    fcRenderSnapshots();
+  }
+}
+
+function fcRenderSnapshots() {
+  const list = document.getElementById("fcSnapshotsList");
+  try {
+    const raw = localStorage.getItem(FC_SNAPSHOT_KEY);
+    const snapshots = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(snapshots) || snapshots.length === 0) {
+      list.innerHTML = '<div class="fc-empty">No snapshots yet.</div>';
+      return;
+    }
+    const rows = snapshots.slice().reverse().map((snap, idx) => {
+      const at = snap && snap.timestamp ? new Date(snap.timestamp).toLocaleString() : "Unknown time";
+      const id = snap && snap.id ? snap.id : idx;
+      const safeId = fcEscapeJsSingleQuoted(String(id));
+      return '<div class="fc-row" style="cursor:default;">' +
+        '<div class="fc-info"><div class="fc-name">Snapshot ' + fcEscapeHtml(id) + '</div><div class="fc-meta">' + fcEscapeHtml(at) + "</div></div>" +
+        '<div><button class="fc-btn-secondary" style="margin-top:0;margin-right:0;" onclick="fcRestoreSnapshot(\'' + safeId + '\')">Restore</button></div>' +
+      "</div>";
+    });
+    list.innerHTML = rows.join("");
+  } catch (e) {
+    list.innerHTML = '<div class="fc-empty">Could not read snapshots.</div>';
+  }
+}
+
+function fcRestoreSnapshot(snapshotId) {
+  try {
+    const raw = localStorage.getItem(FC_SNAPSHOT_KEY);
+    const snapshots = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(snapshots)) return;
+    const match = snapshots.find((s) => s && String(s.id) === String(snapshotId));
+    if (!match) return;
+    const restored = fcSafeParseData(match.data);
+    const proceed = window.confirm("Restore this snapshot and replace current data? Current state will be snapshotted.");
+    if (!proceed) return;
+    if (!fcSaveData(restored)) return;
+    fcStopDueSession("Snapshot restored");
+    fcRender();
+  } catch (e) {
+    fcUpdateSessionUi("Restore failed");
+  }
+}
+
+function fcTodayKey() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + d;
+}
+
+function fcEnsureMeta(data) {
+  if (!data.meta || typeof data.meta !== "object") data.meta = {};
+  const today = fcTodayKey();
+  if (data.meta.day_key !== today) {
+    data.meta.day_key = today;
+    data.meta.reviews_done = 0;
+    data.meta.new_done = 0;
+  }
+  if (!Number.isFinite(data.meta.reviews_done)) data.meta.reviews_done = 0;
+  if (!Number.isFinite(data.meta.new_done)) data.meta.new_done = 0;
+  if (!Array.isArray(data.meta.review_logs)) data.meta.review_logs = [];
+  if (!Array.isArray(data.meta.calibration_history)) data.meta.calibration_history = [];
+  if (!data.meta.behavior || typeof data.meta.behavior !== "object") data.meta.behavior = {};
+  if (!Number.isFinite(data.meta.behavior.manual_grade_changes)) data.meta.behavior.manual_grade_changes = 0;
+  if (!Number.isFinite(data.meta.behavior.postpones)) data.meta.behavior.postpones = 0;
+  if (!Number.isFinite(data.meta.behavior.sessions_started)) data.meta.behavior.sessions_started = 0;
+  if (!Number.isFinite(data.meta.behavior.sessions_completed)) data.meta.behavior.sessions_completed = 0;
+  if (!Number.isFinite(data.meta.behavior.last_session_started_at_ms)) data.meta.behavior.last_session_started_at_ms = 0;
+}
+
+function fcNormalizeCard(card) {
+  if (!Number.isFinite(card.interval_days)) card.interval_days = Math.max((card.stability || 10) / FC_DAY_SECONDS, 0.01);
+  if (!Number.isFinite(card.stability)) card.stability = Math.max(card.interval_days * FC_DAY_SECONDS, 1);
+  if (!Number.isFinite(card.difficulty)) card.difficulty = 5;
+  if (!Number.isFinite(card.retrievability)) card.retrievability = 1;
+  if (!Number.isFinite(card.reps)) card.reps = 0;
+  if (!Number.isFinite(card.lapses)) card.lapses = 0;
+  if (typeof card.leech_suspended_until !== "string") card.leech_suspended_until = "";
+  if (typeof card.leech_watch_until !== "string") card.leech_watch_until = "";
+  if (!Number.isFinite(card.struggle_score)) card.struggle_score = 0;
+  if (!Number.isFinite(card.hard_score)) card.hard_score = 0;
+  if (!Number.isFinite(card.struggle_reviews)) card.struggle_reviews = 0;
+  card.difficulty = Math.max(1, Math.min(10, card.difficulty));
+  card.retrievability = Math.max(0, Math.min(1, card.retrievability));
+  card.struggle_score = Math.max(0, Math.min(1, card.struggle_score));
+  card.hard_score = Math.max(0, Math.min(1, card.hard_score));
+}
+
+function fcRetention(tSeconds, stability) {
+  // FSRS forgetting curve: R(t, S) = (1 + t / (9S))^-1
+  if (stability <= 0) return 0;
+  const tDays = Math.max(0, tSeconds / FC_DAY_SECONDS);
+  const sDays = Math.max(0.01, stability / FC_DAY_SECONDS);
+  return Math.pow(1 + (tDays / (9 * sDays)), -1);
+}
+
+function fcNorm(text) {
+  return text.toUpperCase().replace(/[^A-Z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function fcEscapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function fcEscapeJsSingleQuoted(value) {
+  return String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n");
+}
+
+function fcScore(user, answer) {
+  const u = fcNorm(user);
+  if (!u) return 0;
+  const uLines = user.split("\n").map(fcNorm).filter(Boolean);
+  const aLines = answer.split("\n").map(fcNorm).filter(Boolean);
+  const lineMatch = uLines.filter((line, i) => line === aLines[i]).length;
+  const lineScore = lineMatch / Math.max(aLines.length, 1);
+  const uWords = new Set(u.split(" "));
+  const aWords = fcNorm(answer).split(" ");
+  const overlap = aWords.filter((w) => uWords.has(w)).length;
+  const tokenScore = overlap / Math.max(aWords.length, 1);
+  return Math.round(100 * (0.6 * lineScore + 0.4 * tokenScore));
+}
+
+function fcRecommendRating(score) {
+  if (score < 50) return 0;
+  if (score < 70) return 1;
+  if (score < 90) return 2;
+  return 3;
+}
+
+function fcRatingLabel(rating) {
+  return ["Again", "Hard", "Good", "Easy"][rating] || "Good";
+}
+
+function fcFsrsInitialStability(rating, w) {
+  const idx = Math.max(0, Math.min(3, rating));
+  return Math.max(0.01, Number(w[idx]));
+}
+
+function fcFsrsInitialDifficulty(grade, w) {
+  // FSRS: D0 = w4 - exp(w5 * (G - 1)) + 1
+  return Math.max(1, Math.min(10, Number(w[4]) - Math.exp(Number(w[5]) * (grade - 1)) + 1));
+}
+
+function fcFsrsNextDifficulty(difficulty, grade, w) {
+  // FSRS mean reversion: D' = w7*D0(3) + (1-w7)*(D - w6*(G-3))
+  const d0Good = fcFsrsInitialDifficulty(3, w);
+  const linearDamp = difficulty - Number(w[6]) * (grade - 3);
+  const next = Number(w[7]) * d0Good + (1 - Number(w[7])) * linearDamp;
+  return Math.max(1, Math.min(10, next));
+}
+
+function fcFsrsNextRecallStability(stabilityDays, difficulty, retrievability, grade, w) {
+  // FSRS successful-recall update
+  const hardPenalty = grade === 2 ? Number(w[15]) : 1;
+  const easyBonus = grade === 4 ? Number(w[16]) : 1;
+  const growth =
+    Math.exp(Number(w[8])) *
+    (11 - difficulty) *
+    Math.pow(Math.max(0.01, stabilityDays), -Number(w[9])) *
+    (Math.exp((1 - retrievability) * Number(w[10])) - 1) *
+    hardPenalty *
+    easyBonus;
+  return Math.max(0.02, stabilityDays * (1 + growth));
+}
+
+function fcFsrsNextForgetStability(stabilityDays, difficulty, retrievability, w) {
+  // FSRS lapse update
+  const next = Number(w[11]) * Math.pow(Math.max(0.01, difficulty), -Number(w[12])) *
+    (Math.pow(Math.max(1.0001, stabilityDays + 1), Number(w[13])) - 1) *
+    Math.exp((1 - retrievability) * Number(w[14]));
+  return Math.max(0.02, next);
+}
+
+function fcFsrsInterval(stabilityDays, targetRetention) {
+  // Invert FSRS forgetting curve to solve for interval at desired retention:
+  // I = 9S * (1/R - 1)
+  const r = Math.max(0.85, Math.min(0.9, targetRetention));
+  return Math.max(0.01, 9 * stabilityDays * ((1 / r) - 1));
+}
+
+function fcUpdateCard(card, rating) {
+  fcNormalizeCard(card);
+  const w = Array.isArray(fcSettings.fsrs_w) && fcSettings.fsrs_w.length === 17 ? fcSettings.fsrs_w : FC_FSRS_DEFAULT_W;
+  const grade = Math.max(1, Math.min(4, rating + 1)); // Again/Hard/Good/Easy => 1..4
+  const prevIntervalDays = Math.max(0.01, Number(card.interval_days));
+  const prevStabilityDays = Math.max(0.01, Number(card.stability) / FC_DAY_SECONDS);
+  let stabilityDays = prevStabilityDays;
+  let difficulty = Math.max(1, Math.min(10, Number(card.difficulty)));
+  let reps = parseInt(card.reps, 10);
+  let lapses = parseInt(card.lapses, 10);
+  const lastReviewMs = new Date(card.last_review).getTime();
+  const elapsedDays = Math.max(0, (Date.now() - lastReviewMs) / (1000 * FC_DAY_SECONDS));
+  const retrievability = Math.pow(1 + (elapsedDays / (9 * Math.max(0.01, stabilityDays))), -1);
+  const targetRetention = Math.max(0.85, Math.min(0.9, Number(fcSettings.target_retention) || 0.9));
+  const wasNew = reps <= 0;
+  difficulty = fcFsrsNextDifficulty(difficulty, grade, w);
+  if (wasNew) {
+    if (grade === 1) {
+      stabilityDays = Math.max(0.02, fcFsrsInitialStability(0, w) * 0.6);
+      difficulty = fcFsrsInitialDifficulty(1, w);
+      lapses += 1;
+      reps = 0;
+    } else {
+      stabilityDays = fcFsrsInitialStability(grade - 1, w);
+      difficulty = fcFsrsInitialDifficulty(grade, w);
+      reps = 1;
+    }
+  } else if (grade === 1) {
+    stabilityDays = fcFsrsNextForgetStability(stabilityDays, difficulty, retrievability, w);
+    lapses += 1;
+    reps = 0;
+  } else {
+    stabilityDays = fcFsrsNextRecallStability(stabilityDays, difficulty, retrievability, grade, w);
+    reps += 1;
+  }
+
+  let intervalDays;
+  if (grade === 1) intervalDays = 30 / (24 * 60);
+  else if (grade === 2 && wasNew) intervalDays = 0.5;
+  else intervalDays = fcFsrsInterval(stabilityDays, targetRetention);
+
+  intervalDays = Math.min(intervalDays, 3650);
+  stabilityDays = Math.min(stabilityDays, 3650);
+  card.interval_days = Math.round(intervalDays * 1000) / 1000;
+  card.stability = Math.round(stabilityDays * FC_DAY_SECONDS * 1000) / 1000;
+  card.difficulty = Math.round(difficulty * 1000) / 1000;
+  card.retrievability = Math.round(Math.max(0, Math.min(1, retrievability)) * 10000) / 10000;
+  card.reps = reps;
+  card.lapses = lapses;
+  card.last_review = new Date().toISOString();
+  card.next_due = new Date(Date.now() + intervalDays * FC_DAY_SECONDS * 1000).toISOString();
+  return {
+    prev_interval_days: prevIntervalDays,
+    prev_stability_days: prevStabilityDays,
+    retrievability
+  };
+}
+
+function fcGetRetention(card) {
+  const lastReview = new Date(card.last_review).getTime();
+  const tSeconds = (Date.now() - lastReview) / 1000;
+  const r = fcRetention(tSeconds, card.stability);
+  card.retrievability = Math.round(Math.max(0, Math.min(1, r)) * 10000) / 10000;
+  return r;
+}
+
+function fcIsDue(card) {
+  return new Date(card.next_due) <= new Date();
+}
+
+function fcFormatDue(card) {
+  const due = new Date(card.next_due);
+  const now = new Date();
+  const diff = due - now;
+  if (diff <= 0) return "due now";
+  const mins = Math.floor(diff / 60000);
+  const hrs = Math.floor(mins / 60);
+  const days = Math.floor(hrs / 24);
+  if (days > 0) return "in " + days + "d";
+  if (hrs > 0) return "in " + hrs + "h";
+  return "in " + mins + "m";
+}
+
+function fcFormatDueFromCard(card) {
+  const due = new Date(card.next_due);
+  const now = new Date();
+  const diff = due - now;
+  if (diff <= 0) return "now";
+  const mins = Math.floor(diff / 60000);
+  const hrs = Math.floor(mins / 60);
+  const days = Math.floor(hrs / 24);
+  if (days > 0) return "in " + days + " day" + (days > 1 ? "s" : "");
+  if (hrs > 0) return "in " + hrs + "h";
+  return "in " + mins + "m";
+}
+
+function fcRenderStats(data) {
+  fcEnsureMeta(data);
+  const cards = Object.values(data.cards);
+  const dueCount = cards.filter(fcIsDue).length;
+  const suspendedLeeches = cards.filter(fcLeechIsSuspended).length;
+  const watchLeeches = cards.filter((c) => fcLeechIsWatchMode(c) && !fcLeechIsSuspended(c)).length;
+  const reviewsLeft = Math.max(0, fcSettings.daily_review_limit - data.meta.reviews_done);
+  const health = fcDataHealth(data);
+  const scheduler = "FSRS-17w (" + Math.round((fcSettings.target_retention || 0.9) * 100) + "%)";
+  const behavior = fcBehaviorSummary(data);
+  document.getElementById("fcStatsBar").innerHTML =
+    '<div class="fc-stat"><div class="fc-stat-label">Cards</div><div class="fc-stat-value">' + cards.length + "</div></div>" +
+    '<div class="fc-stat"><div class="fc-stat-label">Due now</div><div class="fc-stat-value" style="color:' + (dueCount > 0 ? "#fca5a5" : "#f3f4f6") + '">' + dueCount + "</div></div>" +
+    '<div class="fc-stat"><div class="fc-stat-label">Workload</div><div class="fc-stat-value">' + reviewsLeft + " left · queue≤" + fcSettings.max_session_queue + "</div></div>" +
+    '<div class="fc-stat"><div class="fc-stat-label">' + health.label + '</div><div class="fc-stat-value">' + health.value + " · " + scheduler + "</div></div>" +
+    '<div class="fc-stat"><div class="fc-stat-label">Behavior (7d)</div><div class="fc-stat-value">Again ' + Math.round(behavior.again_rate * 100) + '% · edits ' + behavior.manual_grade_changes + " · postpone " + behavior.postpones + "</div></div>" +
+    '<div class="fc-stat"><div class="fc-stat-label">Leeches</div><div class="fc-stat-value">' + suspendedLeeches + " suspended · " + watchLeeches + " watch</div></div>";
+}
+
+function fcDataHealth(data) {
+  const cards = Object.values(data.cards || {});
+  if (cards.length === 0) return { label: "Data health", value: "Empty" };
+  let issues = 0;
+  for (const c of cards) {
+    const due = new Date(c.next_due).getTime();
+    const last = new Date(c.last_review).getTime();
+    if (!Number.isFinite(due) || !Number.isFinite(last)) issues += 1;
+    if (!Number.isFinite(c.interval_days) || c.interval_days <= 0) issues += 1;
+    if (!Number.isFinite(c.difficulty) || c.difficulty < 1 || c.difficulty > 10) issues += 1;
+  }
+  if (issues === 0) return { label: "Data health", value: "Good" };
+  return { label: "Data issues", value: String(issues) };
+}
+
+function fcAppendReviewLog(data, entry) {
+  fcEnsureMeta(data);
+  data.meta.review_logs.push(entry);
+  if (data.meta.review_logs.length > FC_REVIEW_LOG_LIMIT) {
+    data.meta.review_logs = data.meta.review_logs.slice(data.meta.review_logs.length - FC_REVIEW_LOG_LIMIT);
+  }
+}
+
+function fcBuildCalibrationDataset() {
+  const data = fcLoadData();
+  fcEnsureMeta(data);
+  return {
+    exported_at: new Date().toISOString(),
+    settings: fcSettings,
+    review_logs: data.meta.review_logs || []
+  };
+}
+
+function fcReplayBrierScore(logs, w) {
+  // Re-derive retrievability from raw elapsed days using the given weight vector,
+  // instead of using the stored retrievability (which reflects old weights).
+  // Uses the FSRS forgetting curve: R = (1 + elapsed_days / (9 * stability_days))^-1
+  // We approximate stability_days from the logged prev_stability_days field.
+  if (!Array.isArray(logs) || logs.length === 0) return null;
+  const sDaysIdx = w ? w : FC_FSRS_DEFAULT_W;
+  let n = 0;
+  let brier = 0;
+  let logloss = 0;
+  let success = 0;
+  let pSum = 0;
+  for (const row of logs) {
+    const prevS = Number(row && row.prev_stability_days);
+    const prevI = Number(row && row.prev_interval_days);
+    const y = Number(row && row.grade) > 0 ? 1 : 0;
+    if (!Number.isFinite(prevS) || prevS <= 0) continue;
+    // Elapsed days at time of review ≈ prev_interval_days (the scheduled interval that was actually waited).
+    // Fall back to prev_stability_days if interval not logged.
+    const elapsedDays = Number.isFinite(prevI) && prevI > 0 ? prevI : prevS;
+    const sDays = Math.max(0.01, prevS);
+    const p = Math.max(0.001, Math.min(0.999, Math.pow(1 + elapsedDays / (9 * sDays), -1)));
+    n += 1;
+    success += y;
+    pSum += p;
+    brier += (p - y) * (p - y);
+    logloss += -(y * Math.log(p) + (1 - y) * Math.log(1 - p));
+  }
+  if (n === 0) return null;
+  return {
+    n,
+    success_rate: Math.round((success / n) * 10000) / 10000,
+    brier: Math.round((brier / n) * 1000000) / 1000000,
+    logloss: Math.round((logloss / n) * 1000000) / 1000000,
+    mean_signed_error: Math.round(((success / n) - (pSum / n)) * 10000) / 10000
+  };
+}
+
+function fcCalibrationMetricsFromLogs(logs) {
+  if (!Array.isArray(logs) || logs.length === 0) return null;
+  let n = 0;
+  let brier = 0;
+  let logloss = 0;
+  let success = 0;
+  let pSum = 0;
+  for (const row of logs) {
+    const pRaw = Number(row && row.retrievability);
+    const y = Number(row && row.grade) > 0 ? 1 : 0;
+    if (!Number.isFinite(pRaw)) continue;
+    const p = Math.max(0.001, Math.min(0.999, pRaw));
+    n += 1;
+    success += y;
+    pSum += p;
+    brier += (p - y) * (p - y);
+    logloss += -(y * Math.log(p) + (1 - y) * Math.log(1 - p));
+  }
+  if (n === 0) return null;
+  return {
+    n: n,
+    success_rate: success / n,
+    brier: brier / n,
+    logloss: logloss / n,
+    mean_signed_error: (success / n) - (pSum / n)
+  };
+}
+
+function fcClampWeight(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(-8, Math.min(8, value));
+}
+
+function fcDefaultCalibrationOptimizer(dataset) {
+  const logs = (dataset && Array.isArray(dataset.review_logs)) ? dataset.review_logs : [];
+  const baseW = (dataset && dataset.settings && Array.isArray(dataset.settings.fsrs_w)) ? dataset.settings.fsrs_w.slice() : FC_FSRS_DEFAULT_W.slice();
+  const metrics = fcCalibrationMetricsFromLogs(logs);
+  if (!metrics || metrics.n < 50) return { fsrs_w: baseW };
+
+  // Simple online gradient-style heuristic:
+  // overconfidence => shorten future intervals by reducing recall-growth weights
+  // and increasing lapse penalty; underconfidence => opposite direction.
+  const learningRate = 0.015;
+  const err = Math.max(-0.2, Math.min(0.2, metrics.mean_signed_error));
+  const nextW = baseW.slice();
+
+  // Recall-growth related terms
+  nextW[8] = fcClampWeight(nextW[8] + learningRate * err * 3.0);
+  nextW[9] = fcClampWeight(nextW[9] - learningRate * err * 2.0);
+  nextW[10] = fcClampWeight(nextW[10] + learningRate * err * 3.0);
+  nextW[15] = fcClampWeight(nextW[15] + learningRate * err * 1.5);
+  nextW[16] = fcClampWeight(nextW[16] + learningRate * err * 1.5);
+
+  // Lapse branch terms (invert direction vs success branch)
+  nextW[11] = fcClampWeight(nextW[11] - learningRate * err * 2.0);
+  nextW[14] = fcClampWeight(nextW[14] - learningRate * err * 2.0);
+
+  // Conservative smooth update: blend with existing weights.
+  const blend = 0.35;
+  for (let i = 0; i < nextW.length; i++) {
+    nextW[i] = fcClampWeight(baseW[i] * (1 - blend) + nextW[i] * blend);
+  }
+  return { fsrs_w: nextW };
+}
+
+function fcEvaluateCalibration() {
+  const el = document.getElementById("fcCalibrationInfo");
+  if (!el) return;
+  const dataset = fcBuildCalibrationDataset();
+  const logs = dataset.review_logs || [];
+  // Stored-retrievability metrics (quick live view)
+  const stored = fcCalibrationMetricsFromLogs(logs);
+  // Replay metrics using current weights (true scoring)
+  const replay = fcReplayBrierScore(logs, fcSettings.fsrs_w);
+  const data = fcLoadData();
+  fcEnsureMeta(data);
+  const history = data.meta.calibration_history || [];
+  let html = "";
+  if (!replay && !stored) {
+    html = "Calibration: not enough review logs yet.";
+  } else {
+    const m = replay || stored;
+    const sourceLabel = replay ? "replay" : "stored-R";
+    html =
+      "<strong>Current (" + sourceLabel + ", n=" + m.n + "):</strong> " +
+      "Brier=" + m.brier.toFixed(4) +
+      " · LogLoss=" + m.logloss.toFixed(4) +
+      " · MSE=" + m.mean_signed_error.toFixed(4) +
+      " · success=" + Math.round(m.success_rate * 100) + "%" +
+      " (Brier lower=better; MSE>0=underconfident, MSE&lt;0=overconfident)";
+    if (history.length > 0) {
+      html += "<br><br><strong>Calibration run history (" + history.length + " runs):</strong><br>";
+      const rows = history.slice().reverse().slice(0, 10);
+      html += rows.map(function(row) {
+        const ts = row.ts ? new Date(row.ts).toLocaleString() : row.day_key;
+        const delta = Number.isFinite(row.brier_delta)
+          ? (row.brier_delta <= 0 ? " ✓ &Delta;=" + row.brier_delta.toFixed(5) : " ✗ &Delta;=+" + row.brier_delta.toFixed(5))
+          : "";
+        const before = Number.isFinite(row.brier_before) ? row.brier_before.toFixed(4) : "—";
+        const after = Number.isFinite(row.brier_after) ? row.brier_after.toFixed(4) : "—";
+        const mse = Number.isFinite(row.mse_before) ? row.mse_before.toFixed(3) : "—";
+        return ts + " · n=" + row.samples + " · Brier " + before + "→" + after + delta + " · MSEbefore=" + mse + " · " + row.optimizer;
+      }).join("<br>");
+      if (history.length > 10) html += "<br>…(" + (history.length - 10) + " older runs hidden)";
+    }
+  }
+  el.innerHTML = html;
+}
+
+function fcReviewLogsWithinDays(logs, days) {
+  const windowMs = Math.max(1, days) * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - windowMs;
+  return (logs || []).filter((row) => {
+    const ts = new Date(row && row.ts).getTime();
+    return Number.isFinite(ts) && ts >= cutoff;
+  });
+}
+
+function fcBehaviorSummary(data) {
+  fcEnsureMeta(data);
+  const logs = data.meta.review_logs || [];
+  const recentLogs = fcReviewLogsWithinDays(logs, 7);
+  const graded = recentLogs.filter((r) => Number.isFinite(Number(r && r.grade)));
+  const againCount = graded.filter((r) => Number(r.grade) === 0).length;
+  const avgAgain = graded.length ? againCount / graded.length : 0;
+  const behavior = data.meta.behavior || {};
+  return {
+    recent_reviews: graded.length,
+    again_rate: avgAgain,
+    manual_grade_changes: Number(behavior.manual_grade_changes) || 0,
+    postpones: Number(behavior.postpones) || 0
+  };
+}
+
+function fcAutoCalibrateMaybe(data) {
+  fcEnsureMeta(data);
+  if (!fcSettings.auto_calibration_enabled) return false;
+  const allLogs = data.meta.review_logs || [];
+  const scopedLogs = fcReviewLogsWithinDays(allLogs, fcSettings.auto_calibration_window_days);
+  if (scopedLogs.length < fcSettings.auto_calibration_min_reviews) return false;
+  const key = fcTodayKey();
+  const alreadyRan = (data.meta.calibration_history || []).some((row) => row && row.day_key === key);
+  if (alreadyRan) return false;
+  try {
+    const hook = window && window.FC_CALIBRATION_HOOK;
+    const optimizerOutput = (typeof hook === "function")
+      ? hook({
+        exported_at: new Date().toISOString(),
+        settings: fcSettings,
+        review_logs: scopedLogs
+      })
+      : fcDefaultCalibrationOptimizer({
+      exported_at: new Date().toISOString(),
+      settings: fcSettings,
+      review_logs: scopedLogs
+    });
+    if (!optimizerOutput || !fcValidWeightsArray(optimizerOutput.fsrs_w)) return false;
+    // True before-score: replay with current (old) weights before overwriting them.
+    const replayBefore = fcReplayBrierScore(scopedLogs, fcSettings.fsrs_w);
+    const normalized = fcNormalizeSettings({ ...fcSettings, fsrs_w: optimizerOutput.fsrs_w });
+    fcSettings = normalized;
+    try {
+      localStorage.setItem(FC_SETTINGS_KEY, JSON.stringify(normalized));
+    } catch (e) {
+      return false;
+    }
+    // True after-score: replay with new weights on the same logs.
+    const replayAfter = fcReplayBrierScore(scopedLogs, normalized.fsrs_w);
+    data.meta.calibration_history.push({
+      ts: new Date().toISOString(),
+      day_key: key,
+      samples: scopedLogs.length,
+      brier_before: replayBefore ? replayBefore.brier : null,
+      brier_after: replayAfter ? replayAfter.brier : null,
+      logloss_before: replayBefore ? replayBefore.logloss : null,
+      logloss_after: replayAfter ? replayAfter.logloss : null,
+      mse_before: replayBefore ? replayBefore.mean_signed_error : null,
+      mse_after: replayAfter ? replayAfter.mean_signed_error : null,
+      success_rate: replayBefore ? replayBefore.success_rate : null,
+      optimizer: (typeof hook === "function") ? "external_hook" : "builtin_default",
+      brier_delta: (replayBefore && replayAfter) ? Math.round((replayAfter.brier - replayBefore.brier) * 1000000) / 1000000 : null
+    });
+    if (data.meta.calibration_history.length > 100) {
+      data.meta.calibration_history = data.meta.calibration_history.slice(data.meta.calibration_history.length - 100);
+    }
+    fcApplySettingsToForm();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function fcLeechIsSuspended(card) {
+  const until = new Date(card.leech_suspended_until || "").getTime();
+  return Number.isFinite(until) && until > Date.now();
+}
+
+function fcLeechIsWatchMode(card) {
+  const until = new Date(card.leech_watch_until || "").getTime();
+  return Number.isFinite(until) && until > Date.now();
+}
+
+function fcUpdateStruggleSignals(card, rating) {
+  const alpha = 0.2;
+  const isHard = rating === 1 ? 1 : 0;
+  const isStruggle = rating <= 1 ? 1 : 0;
+  card.struggle_score = (1 - alpha) * (card.struggle_score || 0) + alpha * isStruggle;
+  card.hard_score = (1 - alpha) * (card.hard_score || 0) + alpha * isHard;
+  card.struggle_reviews = (card.struggle_reviews || 0) + 1;
+}
+
+function fcApplyLeechPolicy(card, rating) {
+  // Path A: repeated lapse failures => hard suspension.
+  if (rating === 0 && (card.lapses || 0) >= fcSettings.leech_lapse_threshold) {
+    const suspendMs = fcSettings.leech_suspend_days * 24 * 60 * 60 * 1000;
+    card.leech_suspended_until = new Date(Date.now() + suspendMs).toISOString();
+    return { type: "lapse_suspend" };
+  }
+
+  // Path B: mixed struggle profile (many Hard + Again) => watch-mode cooldown.
+  const enoughHistory = (card.struggle_reviews || 0) >= fcSettings.mixed_struggle_min_reviews;
+  const mixedStruggle = enoughHistory && (card.struggle_score || 0) >= 0.55 && (card.hard_score || 0) >= 0.30;
+  if (mixedStruggle) {
+    const cooldownMs = fcSettings.mixed_struggle_cooldown_days * 24 * 60 * 60 * 1000;
+    card.leech_watch_until = new Date(Date.now() + cooldownMs).toISOString();
+    const watchDue = Date.now() + 24 * 60 * 60 * 1000; // distinct action: short follow-up review
+    card.next_due = new Date(Math.min(new Date(card.next_due).getTime(), watchDue)).toISOString();
+    return { type: "mixed_watch" };
+  }
+  return { type: "none" };
+}
+
+function fcExportCalibrationData() {
+  const payload = fcBuildCalibrationDataset();
+  const stamp = fcTodayKey().replace(/-/g, "");
+  fcDownloadText("memory_engine_review_logs_" + stamp + ".json", JSON.stringify(payload, null, 2));
+  fcUpdateSessionUi("Review logs exported");
+}
+
+function fcRunCalibrationHook() {
+  try {
+    const hook = window && window.FC_CALIBRATION_HOOK;
+    const output = (typeof hook === "function")
+      ? hook(fcBuildCalibrationDataset())
+      : fcDefaultCalibrationOptimizer(fcBuildCalibrationDataset());
+    if (!output || !fcValidWeightsArray(output.fsrs_w)) {
+      fcUpdateSessionUi("Calibration hook returned invalid weights");
+      return;
+    }
+    const normalized = fcNormalizeSettings({ ...fcSettings, fsrs_w: output.fsrs_w });
+    fcSettings = normalized;
+    try {
+      localStorage.setItem(FC_SETTINGS_KEY, JSON.stringify(normalized));
+    } catch (e) {
+      fcUpdateSessionUi("Calibration produced weights, but saving settings failed.");
+      return;
+    }
+    fcApplySettingsToForm();
+    fcUpdateSessionUi((typeof hook === "function") ? "Calibration hook applied new weights" : "Built-in optimizer applied new weights");
+    fcRender();
+  } catch (e) {
+    fcUpdateSessionUi("Calibration hook failed");
+  }
+}
+
+function fcNoQueueMessage(data) {
+  fcEnsureMeta(data);
+  const reviewsLeft = Math.max(0, fcSettings.daily_review_limit - data.meta.reviews_done);
+  const newLeft = Math.max(0, fcSettings.daily_new_limit - data.meta.new_done);
+  const dueCount = Object.values(data.cards).filter(fcIsDue).length;
+  const watchCount = Object.values(data.cards).filter((c) => fcIsDue(c) && fcLeechIsWatchMode(c) && !fcLeechIsSuspended(c)).length;
+  if (reviewsLeft <= 0) return "Daily review limit reached";
+  if (dueCount > 0 && newLeft <= 0) return "Daily new-card limit reached";
+  if (watchCount > 0) return "Watch-mode cards queued by priority/cap policy";
+  return "No cards due right now";
+}
+
+function fcDueQueue(data) {
+  fcEnsureMeta(data);
+  const reviewBudget = Math.min(
+    Math.max(0, fcSettings.daily_review_limit - data.meta.reviews_done),
+    Math.max(1, fcSettings.max_session_queue)
+  );
+  const newLeft = Math.max(0, fcSettings.daily_new_limit - data.meta.new_done);
+  if (reviewBudget <= 0) return [];
+  const due = Object.entries(data.cards)
+    .filter(([, card]) => fcIsDue(card) && !fcLeechIsSuspended(card))
+    .sort((a, b) => new Date(a[1].next_due) - new Date(b[1].next_due));
+
+  const watchDue = due.filter(([, card]) => fcLeechIsWatchMode(card));
+  const regularDue = due.filter(([, card]) => !fcLeechIsWatchMode(card));
+  // Strict share: cap can be 0 (watch cards fully excluded when budget is small).
+  // Starvation guard: any watch card overdue >= watch_starvation_days bypasses the cap.
+  const starvationDays = Number.isFinite(fcSettings.watch_starvation_days) ? fcSettings.watch_starvation_days : 3;
+  const watchCap = Math.min(
+    fcSettings.watch_mode_max_per_session,
+    Math.floor(reviewBudget * fcSettings.watch_mode_max_share)
+  );
+
+  const queue = [];
+  let usedReviews = 0;
+  let usedNew = 0;
+
+  // Priority path: strict share cap, but starved cards bypass it entirely.
+  const nowMs = Date.now();
+  let usedWatch = 0;
+  const starvedWatch = [];
+  const cappedWatch = [];
+  for (const [name, card] of watchDue) {
+    const overdueDays = (nowMs - new Date(card.next_due).getTime()) / (1000 * FC_DAY_SECONDS);
+    if (overdueDays >= starvationDays) {
+      starvedWatch.push([name, card]);
+    } else {
+      cappedWatch.push([name, card]);
+    }
+  }
+  // Starved first (no cap consumed).
+  for (const [name, card] of starvedWatch) {
+    if (usedReviews >= reviewBudget) break;
+    const isNew = (card.reps || 0) === 0;
+    if (isNew && usedNew >= newLeft) continue;
+    queue.push(name);
+    usedReviews += 1;
+    if (isNew) usedNew += 1;
+  }
+  // Capped watch cards: respect strict share.
+  for (const [name, card] of cappedWatch) {
+    if (usedReviews >= reviewBudget || usedWatch >= watchCap) break;
+    const isNew = (card.reps || 0) === 0;
+    if (isNew && usedNew >= newLeft) continue;
+    queue.push(name);
+    usedReviews += 1;
+    usedWatch += 1;
+    if (isNew) usedNew += 1;
+  }
+
+  // State-aware fill: continue with regular due queue.
+  for (const [name, card] of regularDue) {
+    if (usedReviews >= reviewBudget) break;
+    const isNew = (card.reps || 0) === 0;
+    if (isNew && usedNew >= newLeft) continue;
+    queue.push(name);
+    usedReviews += 1;
+    if (isNew) usedNew += 1;
+  }
+  return queue;
+}
+
+function fcUpdateSessionUi(message) {
+  const startBtn = document.getElementById("fcStartSessionBtn");
+  const stopBtn = document.getElementById("fcStopSessionBtn");
+  const status = document.getElementById("fcSessionStatus");
+  const snoozeBtn = document.getElementById("fcSnoozeReminderBtn");
+  if (!fcSessionActive) {
+    startBtn.style.display = "";
+    stopBtn.style.display = "none";
+    status.textContent = message || "";
+    if (snoozeBtn) snoozeBtn.style.display = "none";
+    if (!message) fcUpdateBackupReminderUi();
+    return;
+  }
+  startBtn.style.display = "none";
+  stopBtn.style.display = "";
+  if (snoozeBtn) snoozeBtn.style.display = "none";
+  const reviewed = fcSessionTotal - fcSessionQueue.length;
+  status.textContent = "Due session: " + reviewed + "/" + fcSessionTotal + " reviewed";
+}
+
+function fcStartDueSession() {
+  const data = fcLoadData();
+  const queue = fcDueQueue(data);
+  if (queue.length === 0) {
+    fcSessionActive = false;
+    fcSessionQueue = [];
+    fcSessionTotal = 0;
+    fcUpdateSessionUi(fcNoQueueMessage(data));
+    return;
+  }
+  fcSessionActive = true;
+  data.meta.behavior.sessions_started += 1;
+  data.meta.behavior.last_session_started_at_ms = Date.now();
+  fcSaveData(data);
+  fcSessionQueue = queue.slice();
+  fcSessionTotal = queue.length;
+  fcCurrentTab = "due";
+  document.querySelectorAll(".fc-tab").forEach((t) => t.classList.remove("active"));
+  const dueTab = Array.from(document.querySelectorAll(".fc-tab")).find((btn) => btn.textContent.trim() === "Due now");
+  if (dueTab) dueTab.classList.add("active");
+  fcUpdateSessionUi();
+  fcStartReview(fcSessionQueue[0], true);
+}
+
+function fcReviewNextDue() {
+  const data = fcLoadData();
+  const queue = fcDueQueue(data);
+  if (queue.length === 0) {
+    fcUpdateSessionUi(fcNoQueueMessage(data));
+    return;
+  }
+  // Single-card mode: open earliest due without session queue state.
+  fcCurrentTab = "due";
+  document.querySelectorAll(".fc-tab").forEach((t) => t.classList.remove("active"));
+  const dueTab = Array.from(document.querySelectorAll(".fc-tab")).find((btn) => btn.textContent.trim() === "Due now");
+  if (dueTab) dueTab.classList.add("active");
+  fcStartReview(queue[0], false);
+}
+
+function fcStopDueSession(message) {
+  const data = fcLoadData();
+  fcEnsureMeta(data);
+  if (fcSessionActive && fcSessionTotal > 0 && fcSessionQueue.length === 0) {
+    data.meta.behavior.sessions_completed += 1;
+    fcSaveData(data);
+  }
+  fcSessionActive = false;
+  fcSessionQueue = [];
+  fcSessionTotal = 0;
+  fcReviewing = null;
+  document.getElementById("fcStatsBar").style.display = "";
+  fcUpdateSessionUi(message || "");
+  fcRender();
+}
+
+function fcAdvanceSessionFrom(currentName) {
+  if (!fcSessionActive) return false;
+  fcSessionQueue = fcSessionQueue.filter((name) => name !== currentName);
+  if (fcSessionQueue.length === 0) {
+    fcStopDueSession("Due session complete");
+    return true;
+  }
+  fcUpdateSessionUi();
+  fcStartReview(fcSessionQueue[0], true);
+  return true;
+}
+
+function fcRenderCards(data) {
+  const list = document.getElementById("fcCardList");
+  const entries = Object.entries(data.cards);
+  let filtered = entries;
+  if (fcCurrentTab === "due") filtered = entries.filter(([, c]) => fcIsDue(c));
+  if (fcCurrentTab === "ok") filtered = entries.filter(([, c]) => !fcIsDue(c) && c.reps > 0);
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="fc-empty">No cards here yet.</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(([name, card]) => {
+    const safeName = fcEscapeHtml(name);
+    const safePrompt = fcEscapeHtml(card.prompt);
+    const nameArg = fcEscapeJsSingleQuoted(name);
+    const ret = fcGetRetention(card);
+    const retPct = Math.round(ret * 100);
+    const due = fcIsDue(card);
+    const isLeechSuspended = fcLeechIsSuspended(card);
+    const isLeechWatch = fcLeechIsWatchMode(card);
+    const badgeClass = due ? "fc-badge-due" : (ret > 0.75 ? "fc-badge-ok" : "fc-badge-soon");
+    const badgeText = isLeechSuspended ? "leech-suspended" : (isLeechWatch ? "leech-watch" : (due ? "due now" : fcFormatDue(card)));
+    const barColor = ret > 0.75 ? "#86efac" : ret > 0.5 ? "#fcd34d" : "#fca5a5";
+    return (
+      '<div class="fc-row" onclick="fcStartReview(\'' + nameArg + '\')">' +
+        '<div class="fc-info">' +
+          '<div class="fc-name">' + safeName + "</div>" +
+          '<div class="fc-meta">' + safePrompt + " · reps: " + card.reps + " · lapses: " + card.lapses + " · S: " + (card.stability / FC_DAY_SECONDS).toFixed(2) + "d · D: " + card.difficulty.toFixed(2) + " · R: " + retPct + "% · interval: " + card.interval_days.toFixed(2) + "d</div>" +
+        "</div>" +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">' +
+          '<span class="fc-badge ' + ((isLeechSuspended || isLeechWatch) ? "fc-badge-soon" : badgeClass) + '">' + badgeText + "</span>" +
+          '<div style="display:flex;align-items:center;gap:6px;">' +
+            '<div class="fc-ret-bar"><div class="fc-ret-fill" style="width:' + retPct + "%;background:" + barColor + ';"></div></div>' +
+            '<span style="font-size:11px;color:#9ca3af;min-width:28px">' + retPct + "%</span>" +
+          "</div>" +
+        "</div>" +
+      "</div>"
+    );
+  }).join("");
+}
+
+function fcRender() {
+  const data = fcLoadData();
+  fcRenderStats(data);
+  if (!fcReviewing) {
+    document.getElementById("fcCardList").style.display = "";
+    document.getElementById("fcReviewPanel").style.display = "none";
+    fcRenderCards(data);
+  }
+}
+
+function fcSetTab(tab, el) {
+  fcCurrentTab = tab;
+  document.querySelectorAll(".fc-tab").forEach((t) => t.classList.remove("active"));
+  el.classList.add("active");
+  fcRender();
+}
+
+function fcStartReview(name, fromSession) {
+  const data = fcLoadData();
+  const card = data.cards[name];
+  if (!card) {
+    if (fcSessionActive && fromSession) fcAdvanceSessionFrom(name);
+    return;
+  }
+  fcReviewing = name;
+  document.getElementById("fcCardList").style.display = "none";
+  document.getElementById("fcStatsBar").style.display = "none";
+  const panel = document.getElementById("fcReviewPanel");
+  panel.style.display = "";
+  const safeName = fcEscapeHtml(name);
+  const safePrompt = fcEscapeHtml(card.prompt);
+  const safeAnswer = fcEscapeHtml(card.answer);
+  const nameArg = fcEscapeJsSingleQuoted(name);
+  panel.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;">' +
+      '<button class="fc-btn-secondary" onclick="fcExitReview()" style="font-size:13px;padding:6px 12px;">← back</button>' +
+      '<span style="font-size:14px;color:#9ca3af;">' + safeName + "</span>" +
+    "</div>" +
+    '<div class="fc-panel">' +
+      '<div class="fc-panel-title">' + safePrompt + "</div>" +
+      '<div class="fc-panel-prompt">Type your recall, evaluate it, then choose a manual grade.</div>' +
+      '<textarea id="fcRecallBox" class="fc-textarea" placeholder="Start typing your recall..."></textarea>' +
+      '<div class="fc-grade-result" id="fcGradeResult"></div>' +
+      '<div class="fc-answer-reveal" id="fcAnswerReveal">' + safeAnswer + "</div>" +
+      '<div class="fc-rate-row">' +
+        '<button class="fc-rate-btn" id="fcRate0" onclick="fcApplyGrade(\'' + nameArg + '\',0)" disabled>Again</button>' +
+        '<button class="fc-rate-btn" id="fcRate1" onclick="fcApplyGrade(\'' + nameArg + '\',1)" disabled>Hard</button>' +
+        '<button class="fc-rate-btn" id="fcRate2" onclick="fcApplyGrade(\'' + nameArg + '\',2)" disabled>Good</button>' +
+        '<button class="fc-rate-btn" id="fcRate3" onclick="fcApplyGrade(\'' + nameArg + '\',3)" disabled>Easy</button>' +
+      "</div>" +
+      '<div class="fc-btn-row">' +
+        '<button class="fc-btn-primary" id="fcSubmitBtn" onclick="fcSubmitRecall(\'' + nameArg + '\')">Evaluate recall</button>' +
+        '<button class="fc-btn-secondary" onclick="fcPostponeCard(\'' + nameArg + '\')">Postpone 10m</button>' +
+      "</div>" +
+    "</div>";
+}
+
+function fcSubmitRecall(name) {
+  const data = fcLoadData();
+  const card = data.cards[name];
+  if (!card) {
+    fcUpdateSessionUi("Card missing, refresh list");
+    fcExitReview();
+    return;
+  }
+  const user = document.getElementById("fcRecallBox").value;
+  const score = fcScore(user, card.answer);
+  const suggested = fcRecommendRating(score);
+  const resultEl = document.getElementById("fcGradeResult");
+  resultEl.className = "fc-grade-result fc-grade-1";
+  resultEl.style.display = "";
+  resultEl.innerHTML = "Auto score: <strong>" + score + "%</strong> — suggested: <strong>" + fcRatingLabel(suggested) + "</strong>. Choose your final grade below.";
+  document.getElementById("fcAnswerReveal").style.display = "";
+  const submitBtn = document.getElementById("fcSubmitBtn");
+  submitBtn.disabled = true;
+  submitBtn.style.opacity = "0.4";
+  for (let i = 0; i < 4; i++) {
+    const btn = document.getElementById("fcRate" + i);
+    btn.disabled = false;
+    if (i === suggested) btn.classList.add("active");
+    else btn.classList.remove("active");
+  }
+}
+
+function fcApplyGrade(name, rating) {
+  const data = fcLoadData();
+  const card = data.cards[name];
+  if (!card) {
+    fcUpdateSessionUi("Card missing, refresh list");
+    fcExitReview();
+    return;
+  }
+  fcEnsureMeta(data);
+  const activeBtn = document.querySelector(".fc-rate-btn.active");
+  const suggested = activeBtn ? Number(String(activeBtn.id).replace("fcRate", "")) : null;
+  if (Number.isFinite(suggested) && suggested !== rating) data.meta.behavior.manual_grade_changes += 1;
+  const wasNew = (card.reps || 0) === 0;
+  const updateInfo = fcUpdateCard(card, rating);
+  fcUpdateStruggleSignals(card, rating);
+  data.meta.reviews_done += 1;
+  if (wasNew) data.meta.new_done += 1;
+  const leechAction = fcApplyLeechPolicy(card, rating);
+  fcAppendReviewLog(data, {
+    ts: new Date().toISOString(),
+    card: name,
+    grade: rating,
+    was_new: wasNew,
+    prev_interval_days: updateInfo.prev_interval_days,
+    prev_stability_days: updateInfo.prev_stability_days,
+    retrievability: Math.round(updateInfo.retrievability * 10000) / 10000,
+    next_interval_days: card.interval_days,
+    next_stability_days: Math.round((card.stability / FC_DAY_SECONDS) * 1000) / 1000,
+    difficulty: card.difficulty,
+    leech_action: leechAction.type
+  });
+  const ranAutoCalibration = fcAutoCalibrateMaybe(data);
+  if (!fcSaveData(data)) return;
+  const resultEl = document.getElementById("fcGradeResult");
+  resultEl.className = "fc-grade-result " + (rating === 0 ? "fc-grade-0" : (rating === 1 ? "fc-grade-1" : "fc-grade-2"));
+  resultEl.style.display = "";
+  resultEl.innerHTML = "<strong>" + fcRatingLabel(rating) + "</strong> saved — next review " + fcFormatDueFromCard(card);
+  if (leechAction.type === "lapse_suspend") resultEl.innerHTML += " · leech suspended for " + fcSettings.leech_suspend_days + " day(s)";
+  if (leechAction.type === "mixed_watch") resultEl.innerHTML += " · mixed-struggle watch mode enabled";
+  if (ranAutoCalibration) resultEl.innerHTML += " · auto calibration applied";
+  for (let i = 0; i < 4; i++) {
+    const btn = document.getElementById("fcRate" + i);
+    btn.disabled = true;
+    btn.classList.remove("active");
+  }
+  fcRenderStats(data);
+  if (fcAdvanceSessionFrom(name)) return;
+}
+
+function fcPostponeCard(name) {
+  const data = fcLoadData();
+  if (!data.cards[name]) {
+    fcUpdateSessionUi("Card missing, refresh list");
+    fcExitReview();
+    return;
+  }
+  fcEnsureMeta(data);
+  data.cards[name].next_due = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  data.meta.behavior.postpones += 1;
+  if (!fcSaveData(data)) return;
+  if (fcAdvanceSessionFrom(name)) return;
+  fcExitReview();
+}
+
+function fcExitReview() {
+  fcReviewing = null;
+  document.getElementById("fcStatsBar").style.display = "";
+  if (fcSessionActive) {
+    fcUpdateSessionUi();
+  }
+  fcRender();
+}
+
+function fcToggleAdd() {
+  const form = document.getElementById("fcAddForm");
+  const isHidden = window.getComputedStyle(form).display === "none";
+  form.style.display = isHidden ? "block" : "none";
+  if (isHidden) {
+    document.getElementById("fcSettingsForm").style.display = "none";
+    document.getElementById("fcSnapshotsForm").style.display = "none";
+  }
+}
+
+function fcAddCard() {
+  const name = document.getElementById("fcNewName").value.trim();
+  const prompt = document.getElementById("fcNewPrompt").value.trim();
+  const answer = document.getElementById("fcNewAnswer").value.trim();
+  if (!name || !answer) {
+    fcUpdateSessionUi("Card name and answer are required.");
+    return;
+  }
+  const data = fcLoadData();
+  fcEnsureMeta(data);
+  if (data.cards[name]) {
+    const overwrite = window.confirm("A card with this name already exists. Replace it?");
+    if (!overwrite) return;
+  }
+  data.cards[name] = {
+    prompt: prompt || "Recall content",
+    answer: answer,
+    stability: 10.0,
+    difficulty: 5.0,
+    retrievability: 1.0,
+    interval_days: 0.01,
+    last_review: new Date().toISOString(),
+    next_due: new Date().toISOString(),
+    reps: 0,
+    lapses: 0
+  };
+  if (!fcSaveData(data)) return;
+  document.getElementById("fcNewName").value = "";
+  document.getElementById("fcNewPrompt").value = "";
+  document.getElementById("fcNewAnswer").value = "";
+  document.getElementById("fcAddForm").style.display = "none";
+  fcUpdateSessionUi("Card added.");
+  fcRender();
+}
+
+function fcBindUiHandlers() {
+  const settingsBtn = document.getElementById("fcSettingsBtn");
+  if (settingsBtn) settingsBtn.addEventListener("click", function onSettingsClick(e) { e.preventDefault(); fcToggleSettings(); });
+  const snapshotsBtn = document.getElementById("fcSnapshotsBtn");
+  if (snapshotsBtn) snapshotsBtn.addEventListener("click", function onSnapshotsClick(e) { e.preventDefault(); fcToggleSnapshots(); });
+}
+
+renderState();
+logEnergy();
+fcSettings = fcLoadSettings();
+fcApplySettingsToForm();
+fcBindUiHandlers();
+fcRender();
+setInterval(fcRender, 5000);
+fcUpdateSessionUi();
+fcUpdateBackupReminderUi();
+</script>
+</body>
+</html>
