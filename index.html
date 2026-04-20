@@ -449,8 +449,13 @@ const FC_SNAPSHOT_KEY = "memory_engine_snapshots";
 const FC_SETTINGS_KEY = "memory_engine_settings";
 const FC_SCHEMA_VERSION = 4;
 const FC_DAY_SECONDS = 24 * 60 * 60;
+// Keep longer telemetry for bounded long-range calibration sampling while remaining capped.
 const FC_REVIEW_LOG_LIMIT = 20000;
 const FC_MEMORY_TYPES = ["fact", "formula", "procedure", "definition", "note"];
+const FC_NEAR_DUPLICATE_JACCARD = 0.82;
+const FC_AT_RISK_INTERVAL_FACTOR = 0.7;
+const FC_AT_RISK_RETRIEVABILITY = 0.4;
+const FC_STABLE_MIN_GROWTH = 1.2;
 const FC_FSRS_DEFAULT_W = [
   0.57, 1.44, 4.14, 10.94,
   5.14, 1.20, 0.94, 0.86,
@@ -475,6 +480,7 @@ const FC_DEFAULTS = {
   watch_starvation_days: 3,
   max_snapshots: 20,
   target_retention: 0.9,
+  // ~100 years upper cap keeps deterministic long-horizon growth bounded.
   max_horizon_days: 36500,
   reactivation_overdue_days: 30,
   backup_reminder_days: 7,
@@ -557,11 +563,12 @@ function fcInferGroupLabel(card) {
 function fcGetOverdueDays(card) {
   const dueMs = new Date(card.next_due).getTime();
   if (!Number.isFinite(dueMs)) return 0;
-  return Math.max(0, (Date.now() - dueMs) / (1000 * FC_DAY_SECONDS));
+  return Math.max(0, (Date.now() - dueMs) / (FC_DAY_SECONDS * 1000));
 }
 
 function fcRetentionHorizonDays(card) {
-  const horizon = fcFsrsInterval(Math.max(0.01, Number(card.stability) || 0.01), Math.max(0.85, Math.min(0.9, Number(fcSettings.target_retention) || 0.9)));
+  const boundedRetention = Math.max(0.85, Math.min(0.9, Number(fcSettings.target_retention) || 0.9));
+  const horizon = fcFsrsInterval(Math.max(0.01, Number(card.stability) || 0.01), boundedRetention);
   return Math.max(0.01, Math.min(Number(fcSettings.max_horizon_days) || FC_DEFAULTS.max_horizon_days, horizon));
 }
 
@@ -578,7 +585,9 @@ function fcUpdateDerivedCardState(card) {
   card.consolidation_score = Math.round(consolid * 10000) / 10000;
   card.retention_horizon_days = Math.round(horizon * 1000) / 1000;
   const reactivationThreshold = Number(fcSettings.reactivation_overdue_days) || FC_DEFAULTS.reactivation_overdue_days;
-  const atRisk = overdueDays >= Math.max(1, Math.min(reactivationThreshold, (card.interval_days || 1) * 0.7)) || (card.retrievability || 0) < 0.4;
+  // At-risk if overdue by a large fraction of interval or already low retrievability.
+  const atRiskWindow = Math.max(1, Math.min(reactivationThreshold, (card.interval_days || 1) * FC_AT_RISK_INTERVAL_FACTOR));
+  const atRisk = overdueDays >= atRiskWindow || (card.retrievability || 0) < FC_AT_RISK_RETRIEVABILITY;
   card.at_risk = Boolean(atRisk);
   if ((card.reps || 0) < 3 || (card.stability || 0) < 7) card.memory_state = "learning";
   else if (atRisk || overdueDays >= reactivationThreshold) card.memory_state = "reactivation";
@@ -612,7 +621,7 @@ function fcDetectDuplicates(data, name, card) {
       return;
     }
     const sim = fcJaccardSimilarity(thisTokens, fcTokenSet((otherCard.prompt || "") + "\n" + (otherCard.answer || "")));
-    if (sim >= 0.82) {
+    if (sim >= FC_NEAR_DUPLICATE_JACCARD) {
       card.near_duplicates.push(otherName);
       if (!card.duplicate_of) card.duplicate_of = otherName;
     }
@@ -711,7 +720,9 @@ function fcLoadData() {
     if (migrated) {
       try {
         localStorage.setItem(FC_STORAGE_KEY, JSON.stringify(parsed));
-      } catch (e) {}
+      } catch (e) {
+        fcUpdateSessionUi("Migration succeeded but could not be persisted due to storage limits.");
+      }
     }
     return parsed;
   } catch (e) {
@@ -1242,7 +1253,9 @@ function fcNormalizeCard(card) {
   card.confidence = Math.max(0, Math.min(1, card.confidence));
   card.long_term_confidence = Math.max(0, Math.min(1, card.long_term_confidence));
   card.consolidation_score = Math.max(0, Math.min(1, card.consolidation_score));
-  card.retention_horizon_days = Math.max(0.01, Math.min(Number(fcSettings.max_horizon_days) || FC_DEFAULTS.max_horizon_days, Number(card.retention_horizon_days) || 0.01));
+  const maxHorizonDays = Number(fcSettings.max_horizon_days) || FC_DEFAULTS.max_horizon_days;
+  const currentHorizon = Number(card.retention_horizon_days) || 0.01;
+  card.retention_horizon_days = Math.max(0.01, Math.min(maxHorizonDays, currentHorizon));
 }
 
 function fcRetention(tSeconds, stability) {
@@ -1361,7 +1374,7 @@ function fcUpdateCard(card, rating) {
   const retrievability = Math.pow(1 + (elapsedDays / (9 * Math.max(0.01, stabilityDays))), -1);
   const targetRetention = Math.max(0.85, Math.min(0.9, Number(fcSettings.target_retention) || 0.9));
   const wasNew = reps <= 0;
-  const overdueDaysBefore = fcGetOverdueDays(card);
+  const overdueDaysBeforeUpdate = fcGetOverdueDays(card);
   difficulty = fcFsrsNextDifficulty(difficulty, grade, w);
   if (wasNew) {
     if (grade === 1) {
@@ -1390,9 +1403,10 @@ function fcUpdateCard(card, rating) {
 
   const maxHorizon = Number(fcSettings.max_horizon_days) || FC_DEFAULTS.max_horizon_days;
   if (card.memory_state === "stable" && grade >= 3) {
-    intervalDays = Math.max(intervalDays, prevIntervalDays * 1.2);
+    // Preserve growth of already-stable memories so they are not over-drilled.
+    intervalDays = Math.max(intervalDays, prevIntervalDays * FC_STABLE_MIN_GROWTH);
   }
-  if (grade === 1 && overdueDaysBefore >= (Number(fcSettings.reactivation_overdue_days) || FC_DEFAULTS.reactivation_overdue_days)) {
+  if (grade === 1 && overdueDaysBeforeUpdate >= (Number(fcSettings.reactivation_overdue_days) || FC_DEFAULTS.reactivation_overdue_days)) {
     intervalDays = Math.max(intervalDays, 0.25);
     card.memory_state = "reactivation";
     card.last_reactivated_at = new Date().toISOString();
@@ -1783,6 +1797,7 @@ function fcDeterministicEvenSample(logs, limit) {
   const arr = Array.isArray(logs) ? logs : [];
   if (arr.length <= limit) return arr.slice();
   if (limit <= 0) return [];
+  if (limit === 1) return [arr[0]];
   const step = (arr.length - 1) / (limit - 1);
   const sampled = [];
   for (let i = 0; i < limit; i++) {
@@ -1791,15 +1806,21 @@ function fcDeterministicEvenSample(logs, limit) {
   return sampled;
 }
 
+function fcReviewLogKey(row) {
+  return String(row && row.ts) + "::" + String(row && row.card);
+}
+
 function fcBuildCalibrationBlend(logs) {
   const all = Array.isArray(logs) ? logs.slice() : [];
   all.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
   const recent = fcReviewLogsWithinDays(all, fcSettings.auto_calibration_window_days);
   const longRange = fcReviewLogsWithinDays(all, fcSettings.auto_calibration_long_range_days);
-  const recentIds = new Set(recent.map((row) => String(row.ts) + "::" + String(row.card)));
-  const oldLong = longRange.filter((row) => !recentIds.has(String(row.ts) + "::" + String(row.card)));
+  const recentIds = new Set(recent.map(fcReviewLogKey));
+  const oldLong = longRange.filter((row) => !recentIds.has(fcReviewLogKey(row)));
   const minLong = Number(fcSettings.auto_calibration_long_range_min_reviews) || 0;
-  const sampledOld = fcDeterministicEvenSample(oldLong, Math.min(oldLong.length, Math.max(minLong, recent.length)));
+  const targetOldSample = Math.max(minLong, recent.length);
+  const boundedOldSample = Math.min(oldLong.length, targetOldSample);
+  const sampledOld = fcDeterministicEvenSample(oldLong, boundedOldSample);
   const merged = recent.concat(sampledOld);
   merged.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
   return merged;
@@ -2152,7 +2173,10 @@ function fcRenderCards(data) {
     const isLeechWatch = fcLeechIsWatchMode(card);
     const isAtRisk = Boolean(card.at_risk);
     const badgeClass = due ? "fc-badge-due" : (ret > 0.75 ? "fc-badge-ok" : "fc-badge-soon");
-    const badgeText = isLeechSuspended ? "leech-suspended" : (isLeechWatch ? "leech-watch" : (isAtRisk ? "at-risk" : (due ? "due now" : fcFormatDue(card))));
+    let badgeText = due ? "due now" : fcFormatDue(card);
+    if (isAtRisk) badgeText = "at-risk";
+    if (isLeechWatch) badgeText = "leech-watch";
+    if (isLeechSuspended) badgeText = "leech-suspended";
     const barColor = ret > 0.75 ? "#86efac" : ret > 0.5 ? "#fcd34d" : "#fca5a5";
     return (
       '<div class="fc-row" onclick="fcStartReview(\'' + nameArg + '\')">' +
@@ -2405,13 +2429,13 @@ function fcAddCard() {
   fcAssignGroup(data.cards[name], requestedGroup);
   fcDetectDuplicates(data, name, data.cards[name]);
   fcUpdateDerivedCardState(data.cards[name]);
-  if (duplicateHintEl && data.cards[name].duplicate_of) {
-    duplicateHintEl.textContent = "Potential duplicate detected: " + data.cards[name].duplicate_of + ". Card kept in same memory group.";
-  }
   const dupTarget = data.cards[name].duplicate_of ? data.cards[data.cards[name].duplicate_of] : null;
   if (dupTarget) {
     data.cards[name].memory_group = dupTarget.memory_group;
     data.cards[name].memory_group_id = dupTarget.memory_group_id;
+    if (duplicateHintEl) {
+      duplicateHintEl.textContent = "Potential duplicate detected: " + data.cards[name].duplicate_of + ". Card inherited its memory group.";
+    }
   }
   fcRebuildIndexes(data);
   if (!fcSaveData(data)) return;
